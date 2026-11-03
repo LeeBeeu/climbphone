@@ -1,0 +1,7 @@
+# Prywatne dane (przejścia z 8a.nu) - nie trafiają do repozytorium
+data/
+
+# Lokalne ustawienia Claude Code
+.claude/
+
+node_modules/

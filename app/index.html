@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#121417">
+  <meta name="description" content="Timer chwytotablicy, dziennik treningów, log przejść i plany treningowe.">
+  <title>ClimbPhone</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="title">ClimbPhone</h1>
+    <a href="#/ustawienia" class="icon-btn" aria-label="Ustawienia">⚙️</a>
+  </header>
+
+  <main id="view"></main>
+
+  <nav class="tabbar">
+    <a href="#/timer" data-tab="timer"><span>⏱️</span>Timer</a>
+    <a href="#/dziennik" data-tab="dziennik"><span>📓</span>Dziennik</a>
+    <a href="#/przejscia" data-tab="przejscia"><span>🧗</span>Przejścia</a>
+    <a href="#/plany" data-tab="plany"><span>📋</span>Plany</a>
+  </nav>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

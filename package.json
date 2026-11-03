@@ -1,0 +1,9 @@
+{
+  "name": "climbphone",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aplikacja PWA do treningów wspinaczkowych",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
