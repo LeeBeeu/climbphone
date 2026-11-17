@@ -45,7 +45,7 @@ Aplikacja ma być osobistym narzędziem wspinacza. Łączy notowanie masy ciała
 
 | Ekran | Co robi | Odpowiednik w etapach |
 | --- | --- | --- |
-| Waga | Szybki wpis, trend, tempo, cel i prognoza, wykres, lista pomiarów, import i eksport CSV | Etap 1 (MVP gotowe) |
+| Waga | Szybki wpis, trend, tempo, cel i prognoza, wykres, lista pomiarów, import i eksport CSV | Etap 1 (MVP gotowe, odebrane na telefonie 17.11.2026) |
 | Timer | Protokoły zwisów (repeaters, max hangs, wytrzymałość, rozgrzewka) i własne; fazy przygotowanie, zwis, odpoczynek, przerwa między seriami; dźwięk, wibracja, blokada wygaszania ekranu; zapis do dziennika | Etap 2: timer 🟡 |
 | Dziennik | Sesje treningowe: data, rodzaj, czas, RPE, notatki; podsumowanie tygodnia i miesiąca | Etap 2: podstawa kalendarza 🟡 |
 | Przejścia | Drogi i bouldery w modelu 8a.nu: rejon, sektor, styl (OS, Flash, RP, wędka, próba), próby, ocena, soft/hard, FA, charakter drogi; import z 8a.nu; logbook z sortowaniem po dacie i trudności; scorecard i piramida wycen | Etap 4: drogi w skałach 🟡 (brak GPS i zdjęć) |
@@ -193,10 +193,10 @@ Separator `;`, linie zaczynające się od `#` to metadane i nagłówek, data w U
 
 - [x] Wpis porannej wagi z ekranu głównego zajmuje najwyżej 2 tapnięcia (otwarcie aplikacji i „Zapisz wagę”, gdy waga jak ostatnio; każda zmiana o 0,1 kg to jedno tapnięcie więcej albo wpis z klawiatury)
 - [x] Trend zgadza się z ręcznym wyliczeniem (testy, do 0,01 kg) i z trendem Libry (342/342)
-- [x] Import CSV z Libry wczytuje całą historię bez duplikatów; format sprawdzony na prawdziwym eksporcie
+- [x] Import CSV z Libry wczytuje całą historię bez duplikatów; format sprawdzony na prawdziwym eksporcie, także na telefonie Samsung (17.11.2026)
 - [x] Prognoza pokazuje datę albo komunikat o nieosiąganiu celu, nigdy datę z przeszłości (test)
 - [x] Reguła zastoju działa na danych testowych z 14-dniowym płaskim trendem (test)
-- [ ] Aplikacja działa bez sieci na komputerze i na telefonie Samsung (do sprawdzenia po publikacji)
+- [x] Aplikacja działa bez sieci na komputerze i na telefonie Samsung (sprawdzone na telefonie 17.11.2026)
 - [x] Eksport CSV daje się ponownie zaimportować bez utraty danych (test)
 
 ## Kolejne moduły
