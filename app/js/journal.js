@@ -169,6 +169,7 @@ export function renderJournal(view) {
         <div class="stat"><b>${month.length}</b><span>sesje w tym miesiącu</span></div>
       </div>
       ${formOpen ? formHtml(draft) : '<button class="btn primary big" id="add">+ Nowy trening</button>'}
+      <a class="btn ghost small" href="#/analityka" style="align-self:flex-end">📊 Analityka i obciążenie</a>
       ${listHtml([...sessions].sort(byNewest))}`;
 
     view.querySelector('#add')?.addEventListener('click', () => openForm(null));

@@ -1,7 +1,7 @@
 // Service worker: aplikacja działa offline. Strategia "najpierw sieć",
 // więc po zmianie kodu wystarczy odświeżyć stronę, a cache to tylko zapas.
 // Przy każdej publikacji podbij VERSION – telefon pobierze nowe pliki i pokaże pasek „Jest nowa wersja”.
-const VERSION = 'v11';
+const VERSION = 'v12';
 const CACHE = `climbphone-${VERSION}`;
 const ASSETS = [
   './',
@@ -23,6 +23,10 @@ const ASSETS = [
   'js/plan-calc.js',
   'js/backup.js',
   'js/backup-calc.js',
+  'js/checkin.js',
+  'js/checkin-calc.js',
+  'js/analytics.js',
+  'js/analytics-calc.js',
   'js/journal.js',
   'js/ascents.js',
   'js/import8a.js',

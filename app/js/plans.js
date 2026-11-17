@@ -2,8 +2,9 @@ import { getState, update, uid } from './store.js';
 import { esc, toast, today, parseDate, fmtMinutes } from './ui.js';
 import {
   PHASES, phaseLabel, weekKeyOf, weekNumber, weekRange, shiftWeek, effectiveDays, hasWeekOverride, planProgress,
-  itemKey, fillBlock, copyPreviousWeek, weekVolume,
+  itemKey, fillBlock, copyPreviousWeek, weekVolume, effectivePool, poolSlots,
 } from './plan-calc.js';
+import { checkinCardHtml, bindCheckin } from './checkin.js';
 
 const TEMPLATES = [
   {
@@ -45,6 +46,17 @@ const TEMPLATES = [
         'Timer: Wytrzymałość 20/10',
         'Core: unoszenie nóg w zwisie 3 × 10',
       ] },
+    ],
+  },
+  {
+    name: 'Elastyczny tydzień (pula treningów)',
+    desc: 'Bez sztywnych dni – odhaczasz treningi, kiedy pasuje. Dobre przy nieregularnym grafiku.',
+    days: [],
+    pool: [
+      '2× Bouldering 90 min, problemy blisko limitu',
+      '1× Chwytotablica: Max hangs 10 s',
+      '1× ARC 40 min',
+      '2× Antagonisty i core 20 min',
     ],
   },
 ];
@@ -93,7 +105,9 @@ export function renderPlans(view) {
     const { plans } = getState();
     const week = currentWeek();
     view.innerHTML = `
-      <p class="muted">Tydzień ${weekNumber(week)} · ${weekLabel(week)}</p>
+      <div class="card-head"><p class="muted">Tydzień ${weekNumber(week)} · ${weekLabel(week)}</p>
+        <a class="btn ghost small" href="#/analityka">📊 Analityka</a></div>
+      ${checkinCardHtml()}
       ${plans.length ? plans.map((p) => {
         const pr = progress(p, week);
         return `
@@ -114,12 +128,13 @@ export function renderPlans(view) {
           </div>`).join('')}
       </section>`;
 
+    bindCheckin(view, render);
     view.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => go(() => {
       openId = b.dataset.open;
       viewWeek = null;
     })));
     view.querySelector('#new').addEventListener('click', () => go(() => {
-      draft = { scope: 'template', name: '', desc: '', days: [{ name: 'Dzień 1', items: [] }] };
+      draft = { scope: 'template', name: '', desc: '', days: [{ name: 'Dzień 1', items: [] }], pool: [] };
     }));
     view.querySelectorAll('[data-tpl]').forEach((b) => b.addEventListener('click', () => {
       const plan = { id: uid(), ...structuredClone(TEMPLATES[b.dataset.tpl]), weeks: {} };
@@ -138,6 +153,7 @@ export function renderPlans(view) {
     const phase = plan.weeks?.[week]?.phase || '';
     const override = hasWeekOverride(plan, week);
     const days = effectiveDays(plan, week);
+    const pool = poolSlots(effectivePool(plan, week));
     const hist = Array.from({ length: 8 }, (_, i) => shiftWeek(week, i - 7));
     const sessions = getState().sessions;
 
@@ -176,6 +192,19 @@ export function renderPlans(view) {
             }).join('')}
           </div>
         </section>`).join('')}
+      ${pool.length ? `
+        <section class="card">
+          <h3>Pula tygodnia <small class="muted">(w dowolny dzień)</small></h3>
+          <div>
+            ${pool.map((slot) => {
+              const checked = !!pr.checks[slot.key];
+              return `<label class="check ${checked ? 'done' : ''}">
+                <input type="checkbox" data-key="${esc(slot.key)}" ${checked ? 'checked' : ''}>
+                <span>${esc(slot.text)}${slot.of > 1 ? ` <small class="muted">(${slot.n}/${slot.of})</small>` : ''}</span>
+              </label>`;
+            }).join('')}
+          </div>
+        </section>` : ''}
       <div class="row">
         <button class="btn" id="copyPrev">⧉ Kopiuj poprzedni tydzień</button>
         <button class="btn" id="editWeek">✏️ Edytuj ten tydzień</button>
@@ -263,16 +292,17 @@ export function renderPlans(view) {
       if (!confirm('Przywrócić szablon w tym tygodniu? Własny plan tego tygodnia zostanie usunięty.')) return;
       setWeeks((p) => {
         const weeks = { ...(p.weeks || {}) };
-        const { days: _drop, ...rest } = weeks[week] || {};
+        const { days: _d, pool: _p, ...rest } = weeks[week] || {};
         if (Object.keys(rest).length) weeks[week] = rest; else delete weeks[week];
         return weeks;
       });
       render();
     });
     $('#editWeek').addEventListener('click', () => go(() => {
-      draft = { scope: 'week', weekKey: week, id: plan.id, name: plan.name, desc: plan.desc, days: structuredClone(days) };
+      draft = { scope: 'week', weekKey: week, id: plan.id, name: plan.name, desc: plan.desc, days: structuredClone(days),
+        pool: [...effectivePool(plan, week)] };
     }));
-    $('#edit').addEventListener('click', () => go(() => { draft = { scope: 'template', ...structuredClone(plan) }; }));
+    $('#edit').addEventListener('click', () => go(() => { draft = { scope: 'template', pool: [], ...structuredClone(plan) }; }));
     $('#reset').addEventListener('click', () => {
       update((s) => { delete s.planChecks[key]; });
       render();
@@ -319,6 +349,11 @@ export function renderPlans(view) {
               placeholder="Jedno ćwiczenie w linii, np.&#10;Rozgrzewka 15 min&#10;Timer: Repeaters 7/3">${esc(day.items.join('\n'))}</textarea>
           </fieldset>`).join('')}
         <button type="button" class="btn ghost" id="addDay">+ Dodaj dzień</button>
+        <fieldset class="day">
+          <strong>Pula tygodnia <small class="muted">(treningi w dowolny dzień, opcjonalnie)</small></strong>
+          <textarea data-pool rows="${Math.max(2, (draft.pool || []).length + 1)}"
+            placeholder="Jeden trening w linii, np.&#10;2× Bouldering 90 min&#10;1× ARC 40 min">${esc((draft.pool || []).join('\n'))}</textarea>
+        </fieldset>
         <div class="row">
           <button type="button" class="btn ghost" id="cancel">Anuluj</button>
           <button class="btn primary">${weekOnly ? 'Zapisz tydzień' : 'Zapisz plan'}</button>
@@ -337,6 +372,7 @@ export function renderPlans(view) {
         day.name = form.querySelector(`[data-name="${i}"]`).value;
         day.items = form.querySelector(`[data-items="${i}"]`).value.split('\n').map((t) => t.trim()).filter(Boolean);
       });
+      draft.pool = form.querySelector('[data-pool]').value.split('\n').map((t) => t.trim()).filter(Boolean);
     }
 
     view.querySelector('#addDay').addEventListener('click', () => {
@@ -356,11 +392,12 @@ export function renderPlans(view) {
       const days = draft.days
         .map((d, i) => ({ name: d.name.trim() || `Dzień ${i + 1}`, items: d.items }))
         .filter((d) => d.items.length);
-      if (!days.length) return toast('Dodaj przynajmniej jedno ćwiczenie');
+      const pool = draft.pool || [];
+      if (!days.length && !pool.length) return toast('Dodaj przynajmniej jedno ćwiczenie albo trening do puli');
       if (weekOnly) {
         update((s) => {
           const p = s.plans.find((x) => x.id === draft.id);
-          p.weeks = { ...(p.weeks || {}), [draft.weekKey]: { ...(p.weeks?.[draft.weekKey] || {}), days } };
+          p.weeks = { ...(p.weeks || {}), [draft.weekKey]: { ...(p.weeks?.[draft.weekKey] || {}), days, pool } };
         });
         toast(`Zapisano plan tygodnia ${weekNumber(draft.weekKey)}`);
         return go(() => { viewWeek = draft.weekKey; draft = null; });
@@ -371,6 +408,7 @@ export function renderPlans(view) {
         name: draft.name.trim(),
         desc: draft.desc.trim(),
         days,
+        pool,
         weeks: existing?.weeks || {},
       };
       update((s) => {

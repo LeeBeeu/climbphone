@@ -567,3 +567,20 @@ details[open] summary { margin-bottom: 8px; }
 .vol-row .meter > span { display: block; height: 100%; background: var(--ok); }
 .vol-w { color: var(--muted); }
 .vol-n { white-space: nowrap; color: var(--muted); }
+
+/* Check-in */
+.ci-q { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+.ci-scale button { min-height: 40px; font-weight: 700; }
+.ci-ends { display: flex; justify-content: space-between; font-size: 11px; }
+.ci-rules { margin: 8px 0 0; padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+
+/* Analityka */
+.stats-cmp .stat small { font-size: 12px; }
+.bars { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; align-items: end; height: 110px; margin: 8px 0; }
+.bar { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 2px; }
+.bar span { display: block; width: 100%; min-height: 2px; background: var(--accent); border-radius: 4px 4px 0 0; }
+.bar small { font-size: 10px; color: var(--muted); height: 12px; }
+.plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; }
+.tbl th, .tbl td { padding: 6px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }

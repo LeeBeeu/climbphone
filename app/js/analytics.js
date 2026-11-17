@@ -1,0 +1,139 @@
+// Ekran „Analityka” (Etap 3): porównanie okresów, przejścia, regularność, obciążenie, siła, check-iny.
+// Obliczenia: analytics-calc.js (wzory opisane w nagłówku tamtego pliku i na ekranie).
+import { getState } from './store.js';
+import { esc, today, fmtMinutes, fmtDate } from './ui.js';
+import {
+  PERIODS, periods, sessionStats, ascentStats, weeklySeries, streak, acwr, ACWR_LABELS, pctChange,
+} from './analytics-calc.js';
+import { weekKeyOf, weekNumber } from './plan-calc.js';
+import { strengthProtocols, strengthSeries } from './load-calc.js';
+import { testStrengthEntries } from './tests-calc.js';
+import { buildSeries } from './weight-calc.js';
+import { ACTIONS, suggestion } from './checkin-calc.js';
+import { plansPct } from './checkin.js';
+import { styleLabel } from './grades.js';
+
+let periodId = '28';
+
+const num = (x) => String(x).replace('.', ',');
+
+function delta(cur, prev, unit = '%') {
+  const d = pctChange(cur, prev);
+  if (d === null) return prev === 0 && cur > 0 ? '<span class="up">nowość</span>' : '<span class="muted">–</span>';
+  if (d === 0) return '<span class="muted">bez zmian</span>';
+  return `<span class="${d > 0 ? 'up' : 'down'}">${d > 0 ? '+' : '−'}${Math.abs(d)}${unit}</span>`;
+}
+
+const tile = (value, label, cmp) => `<div class="stat"><b>${value}</b><span>${label}</span><small>${cmp}</small></div>`;
+
+// Słupki tygodniowe (CSS): wartości i podpis co drugi tydzień.
+function barsHtml(series, value, title, fmt = (v) => v) {
+  const max = Math.max(1, ...series.map(value));
+  return `<div class="bars" role="img" aria-label="${esc(title)}">
+    ${series.map((w, i) => `<div class="bar" title="T${weekNumber(w.week)}: ${fmt(value(w))}">
+      <span style="height:${Math.round((value(w) / max) * 100)}%"></span>
+      <small>${i % 2 === series.length % 2 ? `T${weekNumber(w.week)}` : ''}</small></div>`).join('')}
+  </div>`;
+}
+
+function ascentLine(cur, prev, label, kind) {
+  if (!cur.count && !prev.count) return '';
+  const best = cur.best ? `${esc(cur.best.grade)} ${esc(styleLabel(kind, cur.best.style))}` : '–';
+  return `<li><strong>${label}:</strong> ${cur.count} ${delta(cur.count, prev.count)} · najtrudniejsze ${best}
+    · top 10 średnio <strong>${cur.top10 ? esc(cur.top10) : '–'}</strong>${prev.top10 ? ` <small class="muted">(wcześniej ${esc(prev.top10)})</small>` : ''}</li>`;
+}
+
+function strengthRows(st) {
+  const extra = testStrengthEntries(st.strengthTests);
+  const ws = buildSeries(st.weightEntries, st.settings);
+  return strengthProtocols(st.sessions, extra).map((p) => {
+    const s = strengthSeries(st.sessions, p.id, ws, extra);
+    if (!s.length) return '';
+    const last = s.at(-1);
+    const best = s.reduce((b, x) => (x.pct_bw > b.pct_bw ? x : b));
+    // Zmiana wobec wyniku sprzed ok. 8 tygodni (ostatni punkt nie później niż 56 dni przed ostatnim).
+    const ref = [...s].reverse().find((x) => x.day <= last.day - 56);
+    const ch = ref ? Math.round(last.pct_bw - ref.pct_bw) : null;
+    return `<tr><td>${esc(p.name)}</td><td>${Math.round(last.pct_bw)}%<br><small class="muted">${fmtDate(last.date)}</small></td>
+      <td>${Math.round(best.pct_bw)}%</td>
+      <td>${ch === null ? '<span class="muted">–</span>' : `<span class="${ch > 0 ? 'up' : ch < 0 ? 'down' : ''}">${ch > 0 ? '+' : ch < 0 ? '−' : '±'}${Math.abs(ch)} pp.</span>`}</td></tr>`;
+  }).join('');
+}
+
+export function renderAnalytics(view) {
+  function render() {
+    const st = getState();
+    const period = PERIODS.find((p) => p.id === periodId);
+    const { cur, prev } = periods(today(), period.days);
+    const sc = sessionStats(st.sessions, cur);
+    const sp = sessionStats(st.sessions, prev);
+    const routes = [ascentStats(st.ascents, cur, 'route'), ascentStats(st.ascents, prev, 'route')];
+    const boulders = [ascentStats(st.ascents, cur, 'boulder'), ascentStats(st.ascents, prev, 'boulder')];
+    const weeks = weeklySeries(st.sessions, weekKeyOf(today()), 12);
+    const run = streak(weeks);
+    const ratio = acwr(weeks);
+    const full = weeks.slice(0, -1);
+    const avgPerWeek = num(Math.round((full.reduce((t, w) => t + w.count, 0) / full.length) * 10) / 10);
+    const rows = strengthRows(st);
+    const checkins = [...st.checkins].sort((a, b) => b.week.localeCompare(a.week)).slice(0, 8);
+
+    view.innerHTML = `
+      <div class="seg" id="period">
+        ${PERIODS.map((p) => `<button data-p="${p.id}" class="${p.id === periodId ? 'active' : ''}">${p.label}</button>`).join('')}
+      </div>
+      <p class="muted">Ostatnie ${period.label} (${fmtDate(cur.start)} – ${fmtDate(cur.end)}) w porównaniu z poprzednim okresem tej samej długości.</p>
+      <div class="stats stats-cmp">
+        ${tile(sc.count, 'treningi', delta(sc.count, sp.count))}
+        ${tile(fmtMinutes(sc.minutes), 'czas', delta(sc.minutes, sp.minutes))}
+        ${tile(sc.load || '–', 'obciążenie (sRPE)', delta(sc.load, sp.load))}
+      </div>
+
+      <section class="card">
+        <h2>Przejścia</h2>
+        ${routes[0].count || routes[1].count || boulders[0].count || boulders[1].count
+          ? `<ul class="plain">${ascentLine(...routes, 'Drogi', 'route')}${ascentLine(...boulders, 'Bouldery', 'boulder')}</ul>
+             <p class="muted">Liczą się przejścia OS, Flash, RP i wędka (bez prób). „Top 10” to średnia wycena 10 najtrudniejszych przejść w okresie.</p>`
+          : '<p class="muted">Brak przejść w tym ani w poprzednim okresie.</p>'}
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Regularność</h2><span class="muted">12 tygodni</span></div>
+        ${barsHtml(weeks, (w) => w.count, 'Treningi w tygodniu', (v) => `${v} tr.`)}
+        <p class="muted">Seria: <strong>${run}</strong> ${run === 1 ? 'tydzień' : 'tygodni'} z rzędu z treningiem · średnio ${avgPerWeek} treningu na tydzień.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Obciążenie treningowe</h2><span class="muted">12 tygodni</span></div>
+        ${barsHtml(weeks, (w) => w.load, 'Obciążenie sRPE w tygodniu')}
+        ${ratio ? `<p>Ostatni tydzień wobec średniej z 4: <strong>${num(ratio.ratio)}</strong>
+          <span class="badge ${ratio.zone === 'ok' ? 'ok' : ratio.zone === 'high' ? 'bad' : 'warn'}">${ACWR_LABELS[ratio.zone]}</span></p>`
+          : '<p class="muted">Za mało danych z RPE, żeby porównać tygodnie.</p>'}
+        <details class="how"><summary>Jak to liczymy?</summary>
+          <p>Obciążenie sesji = czas w minutach × intensywność RPE (1–10) z dziennika, np. 90 min × RPE 7 = 630.
+            Sesje bez RPE pomijamy (w tym okresie RPE ma ${sc.rpeCount} z ${sc.count}).</p>
+          <p>Porównanie = obciążenie ostatniego pełnego tygodnia / średnia z 4 pełnych tygodni.
+            Poniżej 0,8 – spadek, 0,8–1,3 – bezpiecznie, powyżej 1,5 – duży skok i większe ryzyko przeciążenia.</p>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>Siła według ćwiczenia</h2>
+        ${rows ? `<table class="tbl"><thead><tr><th>Protokół / ćwiczenie</th><th>Ostatnio</th><th>Rekord</th><th>8 tyg.</th></tr></thead>
+          <tbody>${rows}</tbody></table>
+          <p class="muted">% masy ciała z najcięższej serii dnia; „8 tyg.” to zmiana wobec wyniku sprzed ok. 8 tygodni.</p>`
+          : '<p class="muted">Brak danych: zapisz trening z timera z obciążeniem, ćwiczenie z masą ciała albo test siły.</p>'}
+      </section>
+
+      <section class="card">
+        <h2>Check-iny</h2>
+        ${checkins.length ? `<ul class="plain">${checkins.map((c) => {
+          const s = suggestion(c, plansPct(st, c.week));
+          return `<li>T${weekNumber(c.week)}: ciężkość ${c.load} · samopoczucie ${c.wellbeing} · motywacja ${c.motivation}
+            <span class="badge ${ACTIONS[s.action].css}">${ACTIONS[s.action].label}</span></li>`;
+        }).join('')}</ul>` : '<p class="muted">Brak check-inów. Zrób pierwszy w zakładce Plany na koniec tygodnia.</p>'}
+      </section>`;
+
+    view.querySelectorAll('#period button').forEach((b) => b.addEventListener('click', () => { periodId = b.dataset.p; render(); }));
+  }
+  render();
+}

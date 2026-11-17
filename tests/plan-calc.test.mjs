@@ -53,3 +53,18 @@ test('objętość tygodnia z dziennika', () => {
   ];
   assert.deepEqual(weekVolume(sessions, '2026-W47'), { count: 2, minutes: 135 });
 });
+
+test('pula tygodnia: krotność „2× …”, postęp, kopiowanie i własna pula tygodnia', async () => {
+  const { poolSlots, effectivePool } = await import('../app/js/plan-calc.js');
+  const slots = poolSlots(['2× Bouldering', 'ARC 30 min']);
+  assert.deepEqual(slots.map((s) => [s.text, s.key, s.n, s.of]), [
+    ['Bouldering', 'pool:2× Bouldering', 1, 2], ['Bouldering', 'pool:2× Bouldering#1', 2, 2], ['ARC 30 min', 'pool:ARC 30 min', 1, 1],
+  ]);
+  const plan = { days: [{ name: 'D1', items: ['A'] }], pool: ['2× Bouldering'] };
+  assert.deepEqual(planProgress(plan, { '0:A': true, 'pool:2× Bouldering': true }, '2026-W47'), { total: 3, done: 2, pct: 67 });
+  const weeks = copyPreviousWeek({ ...plan, weeks: { '2026-W46': { pool: ['ARC'] } } }, '2026-W47');
+  assert.deepEqual(weeks['2026-W47'].pool, ['ARC']);
+  assert.deepEqual(effectivePool({ ...plan, weeks }, '2026-W47'), ['ARC']);
+  assert.equal(hasWeekOverride({ weeks: { '2026-W47': { pool: [] } } }, '2026-W47'), true);
+  assert.deepEqual(effectivePool({ days: [] }, '2026-W47'), [], 'stare plany bez puli');
+});

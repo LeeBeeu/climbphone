@@ -4,6 +4,7 @@ import { renderJournal } from './journal.js';
 import { renderAscents } from './ascents.js';
 import { renderPlans } from './plans.js';
 import { renderTests } from './tests.js';
+import { renderAnalytics } from './analytics.js';
 import { renderSettings } from './settings.js';
 import { pwa } from './ui.js';
 
@@ -14,6 +15,7 @@ const routes = {
   testy: { title: 'Testy siły', render: renderTests },
   przejscia: { title: 'Przejścia', render: renderAscents, wide: true },
   plany: { title: 'Plany treningowe', render: renderPlans },
+  analityka: { title: 'Analityka', render: renderAnalytics, tab: 'plany' },
   ustawienia: { title: 'Ustawienia', render: renderSettings },
 };
 
@@ -29,7 +31,7 @@ function navigate() {
   view.innerHTML = '';
   view.classList.toggle('wide', !!route.wide);
   document.getElementById('title').textContent = route.title;
-  document.querySelectorAll('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === key));
+  document.querySelectorAll('.tabbar a').forEach((a) => a.classList.toggle('active', a.dataset.tab === (route.tab || key)));
   cleanup = route.render(view) || null;
   window.scrollTo(0, 0);
 }

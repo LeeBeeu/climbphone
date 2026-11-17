@@ -1,9 +1,10 @@
 // Plany treningowe: tygodnie, fazy, objętość. Czyste funkcje, bez DOM (testy: tests/plan-calc.test.mjs).
 //
-// Plan: { id, name, desc, days: [{ name, items: [] }], weeks: { "2026-W47": { phase, days? } } }
+// Plan: { id, name, desc, days: [{ name, items: [] }], pool: [], weeks: { "2026-W47": { phase, days?, pool? } } }
 //   days      – szablon tygodnia (domyślny dla każdego tygodnia)
-//   weeks[k]  – faza tygodnia i opcjonalnie własny plan tego tygodnia (days), np. po „Kopiuj poprzedni tydzień”
-// Odhaczenia: planChecks["planId|2026-W47"] = { "0:Ćwiczenie": true }
+//   pool      – pula tygodnia: treningi do zrobienia w dowolny dzień (np. „2× bouldering”, „1× ARC”)
+//   weeks[k]  – faza tygodnia i opcjonalnie własny plan tego tygodnia (days, pool), np. po „Kopiuj poprzedni tydzień”
+// Odhaczenia: planChecks["planId|2026-W47"] = { "0:Ćwiczenie": true, "pool:Trening": true }
 
 export const PHASES = [
   { id: 'base', label: 'Baza' },
@@ -49,9 +50,23 @@ export function weekRange(weekKey) {
 
 // Plan obowiązujący w tygodniu: własny tygodnia albo szablon.
 export const effectiveDays = (plan, weekKey) => plan.weeks?.[weekKey]?.days || plan.days;
-export const hasWeekOverride = (plan, weekKey) => !!plan.weeks?.[weekKey]?.days;
+export const effectivePool = (plan, weekKey) => plan.weeks?.[weekKey]?.pool || plan.pool || [];
+export const hasWeekOverride = (plan, weekKey) => !!(plan.weeks?.[weekKey]?.days || plan.weeks?.[weekKey]?.pool);
 
 export const itemKey = (dayIdx, text) => `${dayIdx}:${text}`;
+export const poolKey = (text, n = 0) => `pool:${text}${n ? `#${n}` : ''}`;
+
+// Pozycja puli z krotnością „2× Bouldering” → 2 osobne pola do odhaczenia.
+export function poolSlots(pool) {
+  const out = [];
+  for (const raw of pool) {
+    const m = String(raw).match(/^(\d+)\s*[×x]\s*(.+)$/i);
+    const n = m ? Math.min(14, Number(m[1])) : 1;
+    const text = m ? m[2].trim() : raw;
+    for (let i = 0; i < n; i++) out.push({ text, key: poolKey(raw, i), n: i + 1, of: n });
+  }
+  return out;
+}
 
 export function planProgress(plan, checks, weekKey) {
   let total = 0;
@@ -60,6 +75,10 @@ export function planProgress(plan, checks, weekKey) {
     total++;
     if (checks?.[itemKey(i, text)]) done++;
   }));
+  for (const slot of poolSlots(effectivePool(plan, weekKey))) {
+    total++;
+    if (checks?.[slot.key]) done++;
+  }
   return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
 }
 
@@ -75,10 +94,10 @@ export function fillBlock(weeks, startKey, phase, count, deloadEvery = 0) {
   return out;
 }
 
-// „Kopiuj poprzedni tydzień”: faza i plan dni z tygodnia wcześniej (odhaczenia się nie kopiują).
+// „Kopiuj poprzedni tydzień”: faza, plan dni i pula z tygodnia wcześniej (odhaczenia się nie kopiują).
 export function copyPreviousWeek(plan, weekKey) {
   const prev = shiftWeek(weekKey, -1);
-  const entry = { days: structuredClone(effectiveDays(plan, prev)) };
+  const entry = { days: structuredClone(effectiveDays(plan, prev)), pool: [...effectivePool(plan, prev)] };
   const phase = plan.weeks?.[prev]?.phase;
   if (phase) entry.phase = phase;
   return { ...(plan.weeks || {}), [weekKey]: { ...(plan.weeks?.[weekKey] || {}), ...entry } };
