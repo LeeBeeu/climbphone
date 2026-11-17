@@ -34,6 +34,7 @@ app/                  ← cała aplikacja (to wgrywasz na hosting)
   js/weight.js          ← ekran Waga (wpis, trend, cel, wykres, lista, CSV)
   js/weight-calc.js     ← obliczenia wagi: trend, tempo, prognoza, zastój
   js/weight-csv.js      ← import CSV z Libry i eksport CSV
+  js/load-calc.js       ← obciążenie chwytotablicy w kg i % masy ciała
   js/store.js           ← zapis danych w localStorage
   js/timer.js           ← timer chwytotablicy
   js/journal.js         ← dziennik treningów

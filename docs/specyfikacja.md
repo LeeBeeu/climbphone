@@ -46,7 +46,7 @@ Aplikacja ma być osobistym narzędziem wspinacza. Łączy notowanie masy ciała
 | Ekran | Co robi | Odpowiednik w etapach |
 | --- | --- | --- |
 | Waga | Szybki wpis, trend, tempo, cel i prognoza, wykres, lista pomiarów, import i eksport CSV | Etap 1 (MVP gotowe, odebrane na telefonie 17.11.2026) |
-| Timer | Protokoły zwisów (repeaters, max hangs, wytrzymałość, rozgrzewka) i własne; fazy przygotowanie, zwis, odpoczynek, przerwa między seriami; dźwięk, wibracja, blokada wygaszania ekranu; zapis do dziennika | Etap 2: timer 🟡 |
+| Timer | Protokoły zwisów (repeaters, max hangs, wytrzymałość, rozgrzewka) i własne; fazy przygotowanie, zwis, odpoczynek, przerwa między seriami; dźwięk, wibracja, blokada wygaszania ekranu; obciążenie w kg albo % masy ciała (z trendu wagi); zapis do dziennika z obciążeniem | Etap 2: timer 🟡 |
 | Dziennik | Sesje treningowe: data, rodzaj, czas, RPE, notatki; podsumowanie tygodnia i miesiąca | Etap 2: podstawa kalendarza 🟡 |
 | Przejścia | Drogi i bouldery w modelu 8a.nu: rejon, sektor, styl (OS, Flash, RP, wędka, próba), próby, ocena, soft/hard, FA, charakter drogi; import z 8a.nu; logbook z sortowaniem po dacie i trudności; scorecard i piramida wycen | Etap 4: drogi w skałach 🟡 (brak GPS i zdjęć) |
 | Plany | Plany tygodniowe z dniami i ćwiczeniami do odhaczania, dwa szablony, edytor | Etap 3: plan 🟡 (brak faz i objętości) |
@@ -125,8 +125,8 @@ Moduł ma jeden ekran „Waga” (ekran startowy) z sekcjami: wpis, kafel, wykre
 
 | ID | Wymaganie | Priorytet | Stan |
 | --- | --- | --- | --- |
-| MC-50 | Aktualna masa w treningu = trend z dnia treningu (nie pojedynczy pomiar) | v2 | ⬜ Gotowa funkcja `trendAt()`; użyje jej profil w Etapie 2. |
-| MC-51 | Przy zwisach i podciąganiu z obciążeniem: obciążenie łączne = masa + dodatkowy ciężar, oraz % masy ciała | v2 | ⬜ Razem z logowaniem serii (Etap 2). |
+| MC-50 | Aktualna masa w treningu = trend z dnia treningu (nie pojedynczy pomiar) | v2 | ✅ Timer bierze trend z ostatniego pomiaru (`currentBodyWeight()` w `load-calc.js`); gdy pomiar ma ponad 7 dni, prosi o zważenie się; bez pomiarów masę wpisuje się w timerze. |
+| MC-51 | Przy zwisach i podciąganiu z obciążeniem: obciążenie łączne = masa + dodatkowy ciężar, oraz % masy ciała | v2 | 🟡 Zwisy: w timerze dociążenie w kg (ujemne = odciążenie na bloczku) albo cel w % masy ciała przeliczany na kg z krokiem 0,5 kg; obciążenie widać w trakcie treningu, w podsumowaniu można poprawić faktyczne dociążenie; sesja w dzienniku zapisuje `hang_load` {`body_weight_kg`, `added_kg`, `total_kg`, `pct_bw`} z masą „zamrożoną” w dniu treningu; timer podpowiada ostatnie obciążenie z tym protokołem. Podciąganie: razem z logowaniem serii (Etap 2). |
 | MC-52 | Wykres siły względnej (np. max zwis na 20 mm w % masy) obok trendu wagi | v2 | ⬜ Razem z testami (Etap 3). |
 
 **Import i eksport**
@@ -177,6 +177,14 @@ Prognoza: dni do celu = |trend − granica celu| / (|v| / 7), gdzie granica to g
 
 Zastój: |trend dziś − trend sprzed 14 dni| < 0,2 kg (wymaga historii z co najmniej 14 dni).
 
+Obciążenie na chwytotablicy (MC-50, MC-51; kod `app/js/load-calc.js`). M to masa ciała z trendu, D to dociążenie (ujemne = odciążenie na bloczku). Procent liczymy od całkowitego obciążenia chwytów, jak w Lattice:
+
+```latex
+\text{obciążenie} = M + D, \qquad \%MC = \frac{M + D}{M} \cdot 100, \qquad D_{\text{z }\%} = \operatorname{round}_{0{,}5}\!\left(M \cdot \left(\tfrac{\%}{100} - 1\right)\right)
+```
+
+Przykład: M = 80,8 kg, cel 110% → D = 8,08 → +8 kg, obciążenie 88,8 kg.
+
 **Format CSV z Libry** (eksport z 17.11.2026)
 
 ```text
@@ -225,7 +233,7 @@ Po masie ciała budujemy rdzeń treningowy (Etap 2), potem plan i testy (Etap 3)
 | --- | --- | --- |
 | NF-01 | Offline-first: każdy wpis zapisuje się lokalnie natychmiast; synchronizacja, jeśli będzie, działa w tle | ✅ (bez synchronizacji) |
 | NF-02 | Kod w lokalnym repozytorium Git; dane użytkownika poza repozytorium | ✅ `data/` w `.gitignore` |
-| NF-03 | Ta sama logika obliczeń na komputerze i telefonie, z testami jednostkowymi | ✅ dla wagi: 18 testów (`npm test`), w tym porównanie z prawdziwym eksportem Libry, gdy jest `data/libra.csv` |
+| NF-03 | Ta sama logika obliczeń na komputerze i telefonie, z testami jednostkowymi | ✅ dla wagi i obciążenia: 24 testy (`npm test`), w tym porównanie z prawdziwym eksportem Libry, gdy jest `data/libra.csv` |
 | NF-04 | Dźwięki timera niezależne od obciążenia aplikacji; ekran nie gaśnie w trakcie treningu | 🟡 Blokada ekranu jest; dźwięki do zaplanowania z wyprzedzeniem (Etap 2) |
 | NF-05 | Przywracanie stanu: ostatni ekran, niezapisany wpis, przerwany trening (do 3 godzin) | ⬜ |
 | NF-06 | Jasny i ciemny motyw z jednego zestawu tokenów kolorów | ✅ |

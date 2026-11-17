@@ -1,5 +1,8 @@
 import { getState, update, uid } from './store.js';
-import { esc, toast, today, fmtSeconds, fmtDuration, plural } from './ui.js';
+import { esc, toast, today, fmtSeconds, fmtDuration, plural, fmtDate } from './ui.js';
+import {
+  currentBodyWeight, loadFromAdded, addedFromPct, hangLoadRecord, fmtAdded, BW_STALE_DAYS, PCT_MIN, PCT_MAX,
+} from './load-calc.js';
 
 const BUILTIN = [
   { id: 'b-repeaters', name: 'Repeaters 7/3', prep: 10, hang: 7, rest: 3, reps: 6, sets: 6, setRest: 180 },
@@ -17,11 +20,35 @@ const FIELDS = [
   ['setRest', 'Przerwa między seriami', 's'],
 ];
 
+const LOAD_DEFAULTS = { load_mode: 'kg', added_kg: 0, load_pct: 100 };
+const kgText = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
+
+// Masa ciała do obliczeń: trend z zakładki Waga, a gdy brak pomiarów – wartość wpisana w timerze.
+function bodyWeight() {
+  const s = getState();
+  const bw = currentBodyWeight(s.weightEntries, s.settings);
+  if (bw) return { ...bw, source: 'trend' };
+  const manual = Number(s.settings.hang_body_weight_kg);
+  return manual > 0 ? { kg: manual, source: 'manual' } : null;
+}
+
+// Planowane dociążenie [kg] dla protokołu (w trybie % przeliczone z aktualnej masy ciała).
+function plannedAdded(cfg, bw) {
+  if (cfg.load_mode === 'pct') return bw ? addedFromPct(bw.kg, cfg.load_pct) : null;
+  return Number(cfg.added_kg) || 0;
+}
+
+function loadText(bw, added) {
+  if (added === null || added === undefined) return '';
+  const l = bw && loadFromAdded(bw.kg, added);
+  return l ? `${fmtAdded(added)} · ${kgText(l.total_kg)} kg · ${l.pct_bw}% MC` : fmtAdded(added);
+}
+
 const LABELS = { prep: 'Przygotuj się', hang: 'Zwis', rest: 'Odpoczynek', setrest: 'Przerwa' };
 
 // Wybór zapamiętany między przełączeniami zakładek.
 let selectedId = BUILTIN[0].id;
-let config = { ...BUILTIN[0] };
+let config = { ...LOAD_DEFAULTS, ...BUILTIN[0] };
 
 function buildPhases(p) {
   const phases = [];
@@ -63,6 +90,7 @@ const vibrate = (pattern) => navigator.vibrate?.(pattern);
 
 export function renderTimer(view) {
   let run = null;
+  let runLoad = null; // obciążenie ustalone na starcie treningu
   let wakeLock = null;
 
   const presets = () => [...BUILTIN, ...getState().timerPresets];
@@ -103,12 +131,13 @@ export function renderTimer(view) {
           ${isCustom ? '<button class="btn ghost small danger" id="del">Usuń protokół</button>' : ''}
         </div>
       </section>
+      ${loadCardHtml()}
       <button class="btn primary big" id="start">▶ Start</button>
       <p class="muted center">Ekran nie zgaśnie w trakcie treningu. Sygnał dźwiękowy i wibracja oznaczają zmianę fazy.</p>`;
 
     view.querySelector('#preset').addEventListener('change', (e) => {
       selectedId = e.target.value;
-      config = { ...presets().find((p) => p.id === selectedId) };
+      config = { ...LOAD_DEFAULTS, ...presets().find((p) => p.id === selectedId) };
       renderSetup();
     });
 
@@ -138,11 +167,92 @@ export function renderTimer(view) {
       if (!confirm(`Usunąć protokół „${config.name}”?`)) return;
       update((s) => { s.timerPresets = s.timerPresets.filter((p) => p.id !== selectedId); });
       selectedId = BUILTIN[0].id;
-      config = { ...BUILTIN[0] };
+      config = { ...LOAD_DEFAULTS, ...BUILTIN[0] };
       renderSetup();
     });
 
+    bindLoadCard();
     view.querySelector('#start').addEventListener('click', start);
+  }
+
+  // ---------- Obciążenie względem masy ciała ----------
+
+  function loadCardHtml() {
+    const bw = bodyWeight();
+    const pct = config.load_mode === 'pct';
+    const last = lastHangLoad(selectedId);
+    const bwLine = bw?.source === 'trend'
+      ? `<p class="muted">Masa ciała: <strong>${kgText(bw.kg)} kg</strong> <small>(trend z zakładki Waga, ${fmtDate(bw.date)})</small></p>`
+      : `<label class="field"><span>Masa ciała (kg) <small>– brak pomiarów w zakładce Waga</small></span>
+          <input type="number" id="bw" inputmode="decimal" step="0.1" min="30" max="200" value="${bw?.kg ?? ''}" placeholder="np. 75"></label>`;
+    const lastLoad = last?.hang_load;
+    return `
+      <section class="card">
+        <h2>Obciążenie</h2>
+        <div class="seg" id="lmode">
+          <button data-m="kg" class="${pct ? '' : 'active'}">Dociążenie (kg)</button>
+          <button data-m="pct" class="${pct ? 'active' : ''}">% masy ciała</button>
+        </div>
+        <label class="field"><span>${pct ? 'Obciążenie (% masy ciała)' : 'Dociążenie (kg) <small>– ujemne = odciążenie na bloczku</small>'}</span>
+          <input type="number" id="lval" inputmode="decimal" step="${pct ? 1 : 0.5}"
+            min="${pct ? PCT_MIN : -100}" max="${pct ? PCT_MAX : 150}" value="${pct ? config.load_pct : config.added_kg}">
+        </label>
+        ${bwLine}
+        <p id="lout"></p>
+        ${bw?.source === 'trend' && bw.ageDays > BW_STALE_DAYS
+          ? `<p class="hint">Ostatni pomiar wagi ${bw.ageDays} dni temu – zważ się, żeby % masy ciała był aktualny.</p>` : ''}
+        ${lastLoad ? `<p class="muted">Ostatnio z tym protokołem (${fmtDate(last.date)}): ${fmtAdded(lastLoad.added_kg)}${
+          lastLoad.pct_bw ? ` · ${lastLoad.pct_bw}% MC przy ${kgText(lastLoad.body_weight_kg)} kg` : ''}</p>` : ''}
+      </section>`;
+  }
+
+  function updateLoadOut() {
+    const out = view.querySelector('#lout');
+    if (!out) return;
+    const bw = bodyWeight();
+    const added = plannedAdded(config, bw);
+    if (config.load_mode === 'pct') {
+      out.innerHTML = added === null
+        ? 'Wpisz masę ciała, żeby przeliczyć % na kilogramy.'
+        : `Dociąż: <strong>${fmtAdded(added)}</strong> → ${kgText(bw.kg + added)} kg = ${loadFromAdded(bw.kg, added).pct_bw}% MC <small class="muted">(zaokrąglone do 0,5 kg)</small>`;
+    } else {
+      const l = bw && loadFromAdded(bw.kg, added);
+      out.innerHTML = l
+        ? `Obciążenie chwytów: <strong>${kgText(l.total_kg)} kg = ${l.pct_bw}% masy ciała</strong>`
+        : 'Wpisz masę ciała, żeby zobaczyć % masy ciała.';
+    }
+  }
+
+  function bindLoadCard() {
+    view.querySelectorAll('#lmode button').forEach((b) => b.addEventListener('click', () => {
+      if (b.dataset.m === config.load_mode) return;
+      // Przy zmianie trybu przenosimy bieżące obciążenie, żeby nie zgubić ustawienia.
+      const bw = bodyWeight();
+      const added = plannedAdded(config, bw);
+      if (b.dataset.m === 'pct' && bw) config.load_pct = loadFromAdded(bw.kg, added).pct_bw;
+      if (b.dataset.m === 'kg' && added !== null) config.added_kg = added;
+      config.load_mode = b.dataset.m;
+      renderSetup();
+    }));
+    view.querySelector('#lval').addEventListener('input', (e) => {
+      const v = parseFloat(String(e.target.value).replace(',', '.'));
+      if (config.load_mode === 'pct') config.load_pct = Number.isFinite(v) ? Math.max(PCT_MIN, Math.min(PCT_MAX, v)) : 100;
+      else config.added_kg = Number.isFinite(v) ? Math.max(-100, Math.min(150, v)) : 0;
+      updateLoadOut();
+    });
+    view.querySelector('#bw')?.addEventListener('change', (e) => {
+      const v = parseFloat(String(e.target.value).replace(',', '.'));
+      update((s) => { s.settings.hang_body_weight_kg = v >= 30 && v <= 200 ? v : null; });
+      updateLoadOut();
+    });
+    updateLoadOut();
+  }
+
+  // Ostatnia sesja z tym protokołem, w której zapisano obciążenie.
+  function lastHangLoad(presetId) {
+    return getState().sessions
+      .filter((x) => x.hang_load && x.preset_id === presetId)
+      .sort((a, b) => b.date.localeCompare(a.date) || (b.created || 0) - (a.created || 0))[0] || null;
   }
 
   // ---------- Trening w toku ----------
@@ -151,6 +261,8 @@ export function renderTimer(view) {
     const phases = buildPhases(config);
     if (config.hang <= 0) return toast('Ustaw czas zwisu większy od zera');
     audio.init();
+    const bw = bodyWeight();
+    runLoad = { bw, added: plannedAdded(config, bw) };
     let offset = 0;
     phases.forEach((ph) => { ph.offset = offset; offset += ph.dur; });
     run = {
@@ -186,7 +298,8 @@ export function renderTimer(view) {
         <button class="btn" id="skip">⏭ Pomiń</button>
         <button class="btn danger" id="stop">⏹ Stop</button>
       </div>
-      <p class="muted center">${esc(config.name)} · ${config.sets} × ${config.reps} · zwis ${config.hang} s / odpoczynek ${config.rest} s</p>`;
+      <p class="muted center">${esc(config.name)} · ${config.sets} × ${config.reps} · zwis ${config.hang} s / odpoczynek ${config.rest} s</p>
+      ${runLoad.added !== null ? `<p class="center"><strong>${esc(loadText(runLoad.bw, runLoad.added))}</strong></p>` : ''}`;
 
     view.querySelector('#pause').addEventListener('click', togglePause);
     view.querySelector('#skip').addEventListener('click', () => {
@@ -207,7 +320,7 @@ export function renderTimer(view) {
     view.querySelector('#runner').className = `runner ${ph.type}`;
     view.querySelector('#label').textContent = LABELS[ph.type];
     view.querySelector('#meta').textContent =
-      ph.type === 'prep' ? 'Złap chwyt' :
+      ph.type === 'prep' ? `Złap chwyt${runLoad.added ? ` · ${fmtAdded(runLoad.added)}` : ''}` :
       ph.type === 'setrest' ? `Seria ${ph.set}/${config.sets} zakończona` :
       `Seria ${ph.set}/${config.sets} · Powtórzenie ${ph.rep}/${config.reps}`;
     view.querySelector('#next').textContent = next
@@ -280,15 +393,35 @@ export function renderTimer(view) {
       <section class="card center">
         <h2>${completed ? '💪 Trening zakończony!' : 'Trening przerwany'}</h2>
         <p class="muted">${esc(config.name)} · ${hangsText} · ${fmtDuration(elapsed)}</p>
-        <label class="field" style="text-align:left"><span>Notatka (chwyt, obciążenie, samopoczucie)</span>
-          <textarea id="note" rows="2" placeholder="np. listwa 20 mm, +5 kg"></textarea>
+        <label class="field" style="text-align:left"><span>Dociążenie użyte w treningu (kg) <small>– ujemne = odciążenie</small></span>
+          <input type="number" id="added" inputmode="decimal" step="0.5" min="-100" max="150" value="${runLoad.added ?? 0}">
+        </label>
+        <p class="muted" id="sumload" style="text-align:left"></p>
+        <label class="field" style="text-align:left"><span>Notatka (chwyt, samopoczucie)</span>
+          <textarea id="note" rows="2" placeholder="np. listwa 20 mm, półzaciąg"></textarea>
         </label>
         <button class="btn primary big" id="log">Zapisz w dzienniku</button>
         <button class="btn ghost" id="back">Wróć do timera</button>
       </section>`;
 
+    const readAdded = () => {
+      const v = parseFloat(String(view.querySelector('#added').value).replace(',', '.'));
+      return Number.isFinite(v) ? Math.max(-100, Math.min(150, v)) : 0;
+    };
+    const showLoad = () => {
+      view.querySelector('#sumload').textContent = runLoad.bw
+        ? `Obciążenie: ${loadText(runLoad.bw, readAdded())} (masa ciała ${kgText(runLoad.bw.kg)} kg)`
+        : 'Brak masy ciała – zapiszemy samo dociążenie.';
+    };
+    view.querySelector('#added').addEventListener('input', showLoad);
+    showLoad();
+
     view.querySelector('#log').addEventListener('click', () => {
       const note = view.querySelector('#note').value.trim();
+      const added = readAdded();
+      const hangLoad = runLoad.bw
+        ? hangLoadRecord(runLoad.bw.kg, added)
+        : { body_weight_kg: null, added_kg: added, total_kg: null, pct_bw: null };
       update((s) => s.sessions.push({
         id: uid(),
         created: Date.now(),
@@ -296,7 +429,10 @@ export function renderTimer(view) {
         type: 'Chwytotablica',
         duration: Math.max(1, Math.round(elapsed / 60)),
         rpe: null,
-        notes: [`${config.name}: ${hangsText} po ${config.hang} s`, note].filter(Boolean).join('\n'),
+        preset_id: selectedId,
+        preset_name: config.name,
+        hang_load: hangLoad,
+        notes: [`${config.name}: ${hangsText} po ${config.hang} s, ${loadText(runLoad.bw, added)}`, note].filter(Boolean).join('\n'),
       }));
       toast('Zapisano w dzienniku');
       run = null;

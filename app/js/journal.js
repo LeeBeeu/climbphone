@@ -1,5 +1,13 @@
 import { getState, update, uid } from './store.js';
 import { esc, toast, today, fmtDate, monthLabel, fmtMinutes, startOfWeek, parseDate } from './ui.js';
+import { fmtAdded } from './load-calc.js';
+
+// Obciążenie zapisane z timera: „+5 kg · 106% MC (MC 80,8 kg)”.
+function hangLoadHtml(l) {
+  if (!l) return '';
+  const pct = l.pct_bw ? ` · <strong>${l.pct_bw}% MC</strong> <small>(MC ${String(l.body_weight_kg).replace('.', ',')} kg)</small>` : '';
+  return `<div class="item-sub">🏋️ ${fmtAdded(l.added_kg)}${pct}</div>`;
+}
 
 export const SESSION_TYPES = [
   'Bouldering',
@@ -70,6 +78,7 @@ function listHtml(sessions) {
         <div class="item-main">
           <div class="item-title">${esc(s.type)}</div>
           <div class="item-sub">${fmtDate(s.date)} · ${fmtMinutes(Number(s.duration) || 0)}${s.rpe ? ` · RPE ${s.rpe}` : ''}</div>
+          ${hangLoadHtml(s.hang_load)}
           ${s.notes ? `<div class="item-notes">${esc(s.notes)}</div>` : ''}
         </div>
         <div class="item-actions">
