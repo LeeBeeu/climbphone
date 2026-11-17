@@ -42,8 +42,30 @@ window.addEventListener('beforeinstallprompt', (e) => {
   pwa.installPrompt = e;
 });
 
+// Aktualizacje: nowy service worker przejmuje stronę od razu (skipWaiting), ale otwarta strona dalej
+// działa na starym kodzie. Zamiast przeładowywać bez pytania (np. w trakcie timera) pokazujemy pasek.
+function showUpdateBar() {
+  if (document.getElementById('updateBar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'updateBar';
+  bar.className = 'update-bar';
+  bar.innerHTML = '<span>Jest nowa wersja aplikacji.</span><button class="btn small primary">Odśwież</button>';
+  bar.querySelector('button').addEventListener('click', () => location.reload());
+  document.body.append(bar);
+}
+
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch((err) => console.warn('Service worker:', err));
+  const hadController = !!navigator.serviceWorker.controller; // przy pierwszej instalacji paska nie pokazujemy
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) showUpdateBar(); });
+  navigator.serviceWorker.register('sw.js')
+    .then((reg) => {
+      pwa.registration = reg;
+      // Zainstalowana aplikacja bywa tygodniami „otwarta” w tle – sprawdzamy aktualizację przy każdym powrocie.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    })
+    .catch((err) => console.warn('Service worker:', err));
 }
 // Prośba, by przeglądarka nie czyściła danych przy braku miejsca.
 navigator.storage?.persist?.();

@@ -84,4 +84,4 @@ export function plural(n, one, few, many) {
 }
 
 // Zdarzenie instalacji PWA (Chrome/Samsung Internet), przechwytywane w app.js.
-export const pwa = { installPrompt: null };
+export const pwa = { installPrompt: null, registration: null };

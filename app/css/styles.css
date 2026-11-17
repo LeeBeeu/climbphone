@@ -525,3 +525,12 @@ details[open] summary { margin-bottom: 8px; }
 .up { color: var(--ok); font-weight: 600; }
 .down { color: var(--danger); font-weight: 600; }
 .tabbar a { font-size: 11px; }
+
+/* Pasek „Jest nowa wersja” */
+.update-bar {
+  position: fixed; left: 12px; right: 12px; top: calc(60px + env(safe-area-inset-top)); z-index: 20;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border-radius: 12px; background: var(--accent); color: #fff;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3); font-weight: 600;
+}
+.update-bar .btn { background: #fff; color: var(--accent); border: 0; }

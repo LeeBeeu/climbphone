@@ -1,6 +1,8 @@
 // Service worker: aplikacja działa offline. Strategia "najpierw sieć",
 // więc po zmianie kodu wystarczy odświeżyć stronę, a cache to tylko zapas.
-const CACHE = 'climbphone-v9';
+// Przy każdej publikacji podbij VERSION – telefon pobierze nowe pliki i pokaże pasek „Jest nowa wersja”.
+const VERSION = 'v10';
+const CACHE = `climbphone-${VERSION}`;
 const ASSETS = [
   './',
   'index.html',
@@ -28,8 +30,13 @@ const ASSETS = [
   'icons/icon-512.png',
 ];
 
+self.addEventListener('message', (event) => {
+  if (event.data === 'version') event.source?.postMessage({ version: VERSION });
+});
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
+  // cache: 'reload' – świeże pliki z serwera, nie z pamięci podręcznej przeglądarki.
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS.map((url) => new Request(url, { cache: 'reload' })))));
   self.skipWaiting();
 });
 
@@ -45,8 +52,13 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET' || new URL(request.url).origin !== location.origin) return;
 
+  // GitHub Pages wysyła Cache-Control: max-age=600, więc zwykły fetch przez 10 minut zwracałby starą wersję
+  // z pamięci przeglądarki. 'no-cache' zawsze pyta serwer (gdy plik się nie zmienił, odpowiedź 304 jest mała).
+  const fresh = request.mode === 'navigate'
+    ? new Request(request.url, { cache: 'no-cache', credentials: 'same-origin' })
+    : new Request(request, { cache: 'no-cache' });
   event.respondWith(
-    fetch(request)
+    fetch(fresh)
       .then((response) => {
         const copy = response.clone();
         caches.open(CACHE).then((cache) => cache.put(request, copy));

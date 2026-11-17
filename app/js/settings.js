@@ -86,7 +86,28 @@ export function renderSettings(view) {
         <button class="btn ghost danger" id="wipe">Usuń wszystkie dane</button>
       </section>
 
-      <p class="muted center">ClimbPhone 1.0</p>`;
+      <section class="card">
+        <h2>Wersja</h2>
+        <p class="muted">Wersja aplikacji na tym urządzeniu: <strong id="appVersion">…</strong></p>
+        <button class="btn ghost" id="checkUpdate">Sprawdź aktualizację</button>
+      </section>`;
+
+    // Wersja = nazwa cache service workera (np. climbphone-v10), ta sama co VERSION w sw.js.
+    caches?.keys().then((keys) => {
+      const k = keys.filter((x) => x.startsWith('climbphone-')).sort().at(-1);
+      const el = view.querySelector('#appVersion');
+      if (el) el.textContent = k ? k.replace('climbphone-', '') : 'brak (tryb bez instalacji)';
+    }).catch(() => {});
+    view.querySelector('#checkUpdate').addEventListener('click', async () => {
+      const reg = pwa.registration;
+      if (!reg) return toast('Aktualizacje działają tylko w zainstalowanej aplikacji (https)');
+      try {
+        await reg.update();
+        toast(reg.installing || reg.waiting ? 'Pobieram nową wersję…' : 'Masz najnowszą wersję');
+      } catch {
+        toast('Brak połączenia – spróbuj później');
+      }
+    });
 
     view.querySelector('#routeSystem').addEventListener('change', (e) => {
       update((s) => { s.settings.routeSystem = e.target.value; });
