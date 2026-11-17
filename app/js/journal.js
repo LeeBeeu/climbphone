@@ -1,7 +1,6 @@
 import { getState, update, uid } from './store.js';
 import { esc, toast, today, fmtDate, monthLabel, fmtMinutes, startOfWeek, parseDate } from './ui.js';
-import { fmtAdded, fmtSets } from './load-calc.js';
-import { buildSeries, trendAt } from './weight-calc.js';
+import { fmtAdded, fmtSets, bodyWeightOn } from './load-calc.js';
 import {
   exerciseCatalog, lastExercise, cleanExercises, exPct, fmtExSets, bestExSet, exKey,
 } from './exercises.js';
@@ -27,10 +26,7 @@ const kgText = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
 // Masa ciała w dniu treningu (MC-50): trend z zakładki Waga, a bez pomiarów – masa wpisana w timerze.
 function bodyWeightAt(date) {
   const st = getState();
-  const t = trendAt(buildSeries(st.weightEntries, st.settings), date);
-  if (t) return Math.round(t.trend * 10) / 10;
-  const manual = Number(st.settings.hang_body_weight_kg);
-  return manual > 0 ? manual : null;
+  return bodyWeightOn(st.weightEntries, st.settings, date, st.settings.hang_body_weight_kg);
 }
 
 export const SESSION_TYPES = [

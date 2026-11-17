@@ -29,6 +29,14 @@ export function currentBodyWeight(entries, settings, todayKey = dayKey(new Date(
   };
 }
 
+// Masa ciała w danym dniu (MC-50): trend z dnia (ostatni pomiar tego dnia albo wcześniej),
+// a bez pomiarów – masa wpisana ręcznie. Zaokrąglona do 0,1 kg albo null.
+export function bodyWeightOn(entries, settings, date, manualKg = null) {
+  const t = entries?.length ? trendAt(buildSeries(entries, settings), date) : null;
+  if (t) return round1(t.trend);
+  return Number(manualKg) > 0 ? Number(manualKg) : null;
+}
+
 // Dociążenie [kg] → { total_kg, pct_bw }
 export function loadFromAdded(bodyKg, addedKg) {
   if (!(bodyKg > 0)) return null;
@@ -87,10 +95,11 @@ function strengthEntries(sessions) {
   return out;
 }
 
-// Protokoły i ćwiczenia z zapisanym obciążeniem, od ostatnio używanego: [{ id, name, count, last }]
-export function strengthProtocols(sessions) {
+// Protokoły i ćwiczenia z zapisanym obciążeniem, od ostatnio używanego: [{ id, name, count, last }].
+// `extra` – gotowe wpisy z innych źródeł (np. testy siły: testStrengthEntries()).
+export function strengthProtocols(sessions, extra = []) {
   const map = new Map();
-  for (const e of strengthEntries(sessions)) {
+  for (const e of [...strengthEntries(sessions), ...extra]) {
     const p = map.get(e.key) || { id: e.key, name: e.name || 'Protokół', count: 0, last: '' };
     p.count++;
     if (e.date >= p.last) { p.last = e.date; if (e.name) p.name = e.name; }
@@ -101,9 +110,9 @@ export function strengthProtocols(sessions) {
 
 // Seria siły względnej dla protokołu albo ćwiczenia: jeden punkt na dzień (najwyższy % MC tego dnia).
 // Masa ciała z sesji; gdy jej brak (trening bez pomiarów), bierzemy trend wagi z dnia treningu.
-export function strengthSeries(sessions, key, weightSeries = []) {
+export function strengthSeries(sessions, key, weightSeries = [], extra = []) {
   const byDay = new Map();
-  for (const e of strengthEntries(sessions)) {
+  for (const e of [...strengthEntries(sessions), ...extra]) {
     if (e.key !== key) continue;
     const bw = e.body_weight_kg ?? trendAt(weightSeries, e.date)?.trend ?? null;
     if (!(bw > 0)) continue;

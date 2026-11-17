@@ -38,7 +38,7 @@ Aplikacja ma być osobistym narzędziem wspinacza. Łączy notowanie masy ciała
 | Stos technologiczny | PWA: czysty JavaScript (moduły ES), CSS z tokenami kolorów, service worker; testy obliczeń w Node (`npm test`) | Bez zależności npm. Lokalny podgląd: `npm start` (port 5173). |
 | Platformy | Przeglądarka na komputerze; Samsung (Android) jako zainstalowana PWA z https://leebeeu.github.io/climbphone/ | Działa offline po pierwszym uruchomieniu. |
 | Przechowywanie danych | Lokalnie: jeden obiekt w localStorage (`climbphone.v1`) na każdym urządzeniu osobno | Kopia i przenoszenie: Ustawienia → Eksport/Import (JSON). |
-| Gotowe ekrany i funkcje | Waga, Timer, Dziennik, Przejścia, Plany, Ustawienia | Szczegóły w tabeli poniżej. |
+| Gotowe ekrany i funkcje | Waga, Timer, Dziennik, Testy, Przejścia, Plany, Ustawienia | Szczegóły w tabeli poniżej. |
 | Struktura danych | Kolekcje: `weightEntries`, `weightGoals`, `sessions`, `ascents`, `plans`, `planChecks`, `timerPresets`, `settings` | Model wagi w sekcji Etapu 1; pozostałe opisane w kodzie (`app/js/store.js`). |
 
 **Ekrany dziś**
@@ -49,6 +49,7 @@ Aplikacja ma być osobistym narzędziem wspinacza. Łączy notowanie masy ciała
 | Timer | Protokoły zwisów (repeaters, max hangs, wytrzymałość, rozgrzewka) i własne; fazy przygotowanie, zwis, odpoczynek, przerwa między seriami; dźwięk, wibracja, blokada wygaszania ekranu; obciążenie w kg albo % masy ciała (z trendu wagi); zapis do dziennika z obciążeniem | Etap 2: timer 🟡 |
 | Dziennik | Sesje treningowe: data, rodzaj, czas, RPE, notatki; podsumowanie tygodnia i miesiąca | Etap 2: podstawa kalendarza 🟡 |
 | Przejścia | Drogi i bouldery w modelu 8a.nu: rejon, sektor, styl (OS, Flash, RP, wędka, próba), próby, ocena, soft/hard, FA, charakter drogi; import z 8a.nu; logbook z sortowaniem po dacie i trudności; scorecard i piramida wycen | Etap 4: drogi w skałach 🟡 (brak GPS i zdjęć) |
+| Testy | Pięć stałych testów siły: max zwis 10 s na 20 mm, podciągnięcie z obciążeniem (1 powt.), max podciągnięć, zwis na czas na 20 mm, czas ARC; opis wykonania, wynik z % MC, rekordy, wykres postępu, historia z edycją | Etap 3: testy ✅ |
 | Plany | Plany tygodniowe z dniami i ćwiczeniami do odhaczania, dwa szablony, edytor | Etap 3: plan 🟡 (brak faz i objętości) |
 | Ustawienia | Skale wycen, ustawienia trendu wagi, kopia zapasowa, import z 8a.nu, instalacja | NF-08 ✅ |
 
@@ -127,7 +128,7 @@ Moduł ma jeden ekran „Waga” (ekran startowy) z sekcjami: wpis, kafel, wykre
 | --- | --- | --- | --- |
 | MC-50 | Aktualna masa w treningu = trend z dnia treningu (nie pojedynczy pomiar) | v2 | ✅ Timer bierze trend z ostatniego pomiaru (`currentBodyWeight()` w `load-calc.js`); gdy pomiar ma ponad 7 dni, prosi o zważenie się; bez pomiarów masę wpisuje się w timerze. |
 | MC-51 | Przy zwisach i podciąganiu z obciążeniem: obciążenie łączne = masa + dodatkowy ciężar, oraz % masy ciała | v2 | ✅ Zwisy: w timerze dociążenie w kg (ujemne = odciążenie na bloczku) albo cel w % masy ciała przeliczany na kg z krokiem 0,5 kg; obciążenie widać w trakcie treningu, w podsumowaniu można poprawić faktyczne dociążenie; sesja w dzienniku zapisuje `hang_load` {`body_weight_kg`, `added_kg`, `total_kg`, `pct_bw`} z masą „zamrożoną” w dniu treningu; timer podpowiada ostatnie obciążenie z tym protokołem. Serie logowane osobno, sesja bierze najcięższą ukończoną. Ćwiczenia poza timerem (dziennik): podciąganie, dipy itp. jako serie powtórzenia × dociążenie, % MC z trendu wagi w dniu treningu (`body_weight_kg` w sesji); ćwiczenia z ciężarem (martwy ciąg itp.) w kg bez % MC; ćwiczenia z masą ciała są też na wykresie siły względnej (najcięższa seria dnia). |
-| MC-52 | Wykres siły względnej (np. max zwis na 20 mm w % masy) obok trendu wagi | v2 | 🟡 Pod wykresem wagi, ta sama oś czasu, zakres i przewijanie; wybór protokołu z timera; punkt = najwyższy % MC dnia (`strengthSeries()`), linia 100% = sama masa ciała; ostatni i najlepszy wynik. Sesja bez zapisanej masy bierze trend z dnia treningu. Wyniki testów (np. max zwis na 20 mm) dojdą w Etapie 3. |
+| MC-52 | Wykres siły względnej (np. max zwis na 20 mm w % masy) obok trendu wagi | v2 | ✅ Pod wykresem wagi, ta sama oś czasu, zakres i przewijanie; wybór protokołu z timera; punkt = najwyższy % MC dnia (`strengthSeries()`), linia 100% = sama masa ciała; ostatni i najlepszy wynik. Sesja bez zapisanej masy bierze trend z dnia treningu. Na liście są też testy siły z obciążeniem (np. „Test: Max zwis 10 s – 20 mm”) i ćwiczenia z masą ciała. |
 
 **Import i eksport**
 
@@ -221,7 +222,7 @@ Po masie ciała budujemy rdzeń treningowy (Etap 2), potem plan i testy (Etap 3)
 | 2 | Kalendarz | Tydzień rozwijany do miesiąca; kolor według typu; statusy wykonany, częściowo, pominięty | Crimpd v9 | 🟡 Dziennik sesji jest podstawą danych |
 | 3 | Plan | Tygodnie z fazami (Base, Rest, Peak, Taper), mikrocykl 3:1, objętość tygodniowa, pula treningów na tydzień i „Kopiuj poprzedni tydzień” | Crimpd + Lattice | 🟡 Plany tygodniowe z odhaczaniem, bez faz |
 | 3 | Tygodniowy check-in | Obciążenie, samopoczucie, motywacja, gotowość (normalnie, deload, odpoczynek, kontuzja); sugestia Zwiększ, Utrzymaj, Zmniejsz według spisanych reguł | Lattice | ⬜ |
-| 3 | Testy | Max zwis na 20 mm, podciągnięcie z obciążeniem, czas ARC; historia, wykres, wynik w % masy ciała | Crimpd + Lattice | ⬜ |
+| 3 | Testy | Max zwis na 20 mm, podciągnięcie z obciążeniem, czas ARC; historia, wykres, wynik w % masy ciała | Crimpd + Lattice | ✅ Zakładka „Testy” (`app/js/tests.js`, obliczenia `app/js/tests-calc.js`): 5 testów (dodatkowo max podciągnięć i zwis na czas), opis wykonania, wynik `strengthTests` [{`test_id`, `date`, `value`, `body_weight_kg`, `edge_mm`, `grip`, `notes`}], masa ciała z trendu w dniu testu, rekord i zmiana w obrębie wariantu (listwa + chwyt), wykres postępu z linią rekordu, edycja i usuwanie. Testy z obciążeniem są też na wykresie siły w zakładce Waga. |
 | 3 | Analityka | Kafle z porównaniem okresów, regularność, przejścia według wyceny, siła według ćwiczenia, workload z jawnym wzorem, „Project grade” i „Forma” | Crimpd + Lattice | 🟡 Scorecard i piramida wycen przejść |
 | 4 | Drogi w skałach | Rejon, sektor, nazwa, styl (OS, flash, RP), próby, projekty, GPS, zdjęcia | Luka w obu | 🟡 Wszystko poza GPS i zdjęciami; import z 8a.nu |
 | 4 | Tensjometr | Tindeq Progressor przez Bluetooth: siła palców w kg, krzywa siły | Luka w obu | ⬜ Web Bluetooth działa w Chrome na Androidzie |
@@ -233,7 +234,7 @@ Po masie ciała budujemy rdzeń treningowy (Etap 2), potem plan i testy (Etap 3)
 | --- | --- | --- |
 | NF-01 | Offline-first: każdy wpis zapisuje się lokalnie natychmiast; synchronizacja, jeśli będzie, działa w tle | ✅ (bez synchronizacji) |
 | NF-02 | Kod w lokalnym repozytorium Git; dane użytkownika poza repozytorium | ✅ `data/` w `.gitignore` |
-| NF-03 | Ta sama logika obliczeń na komputerze i telefonie, z testami jednostkowymi | ✅ dla wagi, obciążenia i ćwiczeń: 33 testy (`npm test`), w tym porównanie z prawdziwym eksportem Libry, gdy jest `data/libra.csv` |
+| NF-03 | Ta sama logika obliczeń na komputerze i telefonie, z testami jednostkowymi | ✅ dla wagi, obciążenia, ćwiczeń i testów siły: 38 testów (`npm test`), w tym porównanie z prawdziwym eksportem Libry, gdy jest `data/libra.csv` |
 | NF-04 | Dźwięki timera niezależne od obciążenia aplikacji; ekran nie gaśnie w trakcie treningu | 🟡 Blokada ekranu jest; dźwięki do zaplanowania z wyprzedzeniem (Etap 2) |
 | NF-05 | Przywracanie stanu: ostatni ekran, niezapisany wpis, przerwany trening (do 3 godzin) | ⬜ |
 | NF-06 | Jasny i ciemny motyw z jednego zestawu tokenów kolorów | ✅ |

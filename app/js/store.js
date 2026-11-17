@@ -12,6 +12,7 @@ const defaults = () => ({
   plans: [],         // plany treningowe
   planChecks: {},    // odhaczone ćwiczenia: { "planId|2026-W45": { "0:Ćwiczenie": true } }
   timerPresets: [],  // własne protokoły timera
+  strengthTests: [], // wyniki testów siły (Etap 3): { id, test_id, date, value, body_weight_kg, edge_mm, grip, notes }
   // Moduł masy ciała – nazwy pól jak w docs/specyfikacja.md, żeby dało się je przenieść 1:1 do bazy.
   weightEntries: [], // weight_entries: pomiary
   weightGoals: [],   // weight_goal: aktywny cel = ostatni bez ended_at, wcześniejsze to historia

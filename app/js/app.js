@@ -3,6 +3,7 @@ import { renderTimer } from './timer.js';
 import { renderJournal } from './journal.js';
 import { renderAscents } from './ascents.js';
 import { renderPlans } from './plans.js';
+import { renderTests } from './tests.js';
 import { renderSettings } from './settings.js';
 import { pwa } from './ui.js';
 
@@ -10,6 +11,7 @@ const routes = {
   waga: { title: 'Masa ciała', render: renderWeight },
   timer: { title: 'Timer chwytotablicy', render: renderTimer },
   dziennik: { title: 'Dziennik treningów', render: renderJournal },
+  testy: { title: 'Testy siły', render: renderTests },
   przejscia: { title: 'Przejścia', render: renderAscents, wide: true },
   plany: { title: 'Plany treningowe', render: renderPlans },
   ustawienia: { title: 'Ustawienia', render: renderSettings },

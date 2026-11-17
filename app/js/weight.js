@@ -4,6 +4,7 @@ import { esc, toast, plural, parseDate, monthLabel, today as todayKey } from './
 import * as W from './weight-calc.js';
 import { parseWeightCsv, splitDuplicates, toWeightCsv } from './weight-csv.js';
 import { strengthProtocols, strengthSeries, fmtAdded } from './load-calc.js';
+import { testStrengthEntries } from './tests-calc.js';
 
 const RANGES = [['14', '2 tyg.'], ['90', '3 mies.'], ['365', 'Rok'], ['all', 'Całość']];
 const STATUS = {
@@ -63,15 +64,15 @@ function computeModel() {
     forecast: last ? W.forecast(series, v, goal, today) : null,
     plateau: !!goal && status !== 'in_goal' && W.isPlateau(series),
     stale: last ? W.dayNumber(today) - last.day > STALE_DAYS : false,
-    ...strengthModel(st.sessions, series),
+    ...strengthModel(st.sessions, series, testStrengthEntries(st.strengthTests)),
   };
 }
 
 // Siła względna (MC-52): sesje z timera z zapisanym obciążeniem, wybrany protokół.
-function strengthModel(sessions, series) {
-  const protocols = strengthProtocols(sessions);
+function strengthModel(sessions, series, extra) {
+  const protocols = strengthProtocols(sessions, extra);
   if (!protocols.some((p) => p.id === strengthPreset)) strengthPreset = protocols[0]?.id ?? null;
-  return { protocols, strength: strengthPreset ? strengthSeries(sessions, strengthPreset, series) : [] };
+  return { protocols, strength: strengthPreset ? strengthSeries(sessions, strengthPreset, series, extra) : [] };
 }
 
 // ---------- Wpis pomiaru (MC-01…MC-05) ----------
@@ -339,7 +340,7 @@ function drawStrength(el, m) {
 function strengthHtml(m) {
   if (!m.protocols.length) {
     return `<h3 class="sub-title">Siła względna</h3>
-      <p class="muted">Zapisz trening z timera z obciążeniem albo ćwiczenie z masą ciała w dzienniku (np. podciąganie), a tutaj zobaczysz obciążenie w % masy ciała obok trendu wagi.</p>`;
+      <p class="muted">Zapisz trening z timera z obciążeniem, ćwiczenie z masą ciała w dzienniku (np. podciąganie) albo test siły, a tutaj zobaczysz obciążenie w % masy ciała obok trendu wagi.</p>`;
   }
   const last = m.strength.at(-1);
   const best = m.strength.reduce((b, p) => (!b || p.pct_bw > b.pct_bw ? p : b), null);

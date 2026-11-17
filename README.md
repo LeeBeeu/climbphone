@@ -36,6 +36,8 @@ app/                  ← cała aplikacja (to wgrywasz na hosting)
   js/weight-csv.js      ← import CSV z Libry i eksport CSV
   js/load-calc.js       ← obciążenie chwytotablicy w kg i % masy ciała
   js/exercises.js       ← ćwiczenia poza timerem (podciąganie, dipy, martwy ciąg…)
+  js/tests.js           ← ekran testów siły (wynik, rekordy, wykres, historia)
+  js/tests-calc.js      ← definicje testów siły i obliczenia
   js/store.js           ← zapis danych w localStorage
   js/timer.js           ← timer chwytotablicy
   js/journal.js         ← dziennik treningów
