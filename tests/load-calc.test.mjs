@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   loadFromAdded, addedFromPct, hangLoadRecord, fmtAdded, roundTo, currentBodyWeight, strengthSeries, strengthProtocols,
-  initSets, bestSet, sessionHangLoad, fmtSets, progression,
+  initSets, bestSet, sessionHangLoad, fmtSets, progression, avgEffort,
 } from '../app/js/load-calc.js';
 
 const SETTINGS = { weight_trend_method: 'libra', weight_trend_tau_days: 7, weight_daily_mode: 'first' };
@@ -80,7 +80,7 @@ test('siła względna: punkt na dzień, najwyższy % MC, masa z sesji albo z tre
 
 test('serie: najcięższa ukończona seria wyznacza obciążenie sesji', () => {
   const sets = initSets(3, 6, 8);
-  assert.deepEqual(sets[2], { set: 3, reps_planned: 6, reps_done: null, added_kg: 8 });
+  assert.deepEqual(sets[2], { set: 3, reps_planned: 6, reps_done: null, added_kg: 8, effort: null });
   sets[0].reps_done = 6;
   sets[1].reps_done = 6; sets[1].added_kg = 10;
   sets[2].reps_done = 0; sets[2].added_kg = 12;       // nieudana seria się nie liczy
@@ -115,4 +115,24 @@ test('progresja: wszystkie powtórzenia → +0,5 kg, ≥ 75% → bez zmian, mnie
   assert.deepEqual([old.base_kg, old.verdict, old.suggest_kg], [5, null, 5]);
   assert.equal(progression(null), null);
   assert.equal(progression({ hang_load: null }), null);
+});
+
+test('wysiłek 1–5: średnia, tekst serii i wpływ na progresję', () => {
+  assert.equal(avgEffort([{ effort: 3 }, { effort: 4 }, { effort: null }]), 3.5);
+  assert.equal(avgEffort([{ effort: null }]), null);
+  assert.equal(initSets(1, 6, 8)[0].effort, null);
+  const sets = [{ reps_done: 6, reps_planned: 6, added_kg: 8, effort: 3 }, { reps_done: 6, reps_planned: 6, added_kg: 8, effort: 4 }];
+  assert.equal(fmtSets(sets), '6/6 · 6/6 (+8 kg) · wysiłek 3,5/5');
+  const sess = (efforts) => ({ hang_load: { added_kg: 8 }, hang_sets: efforts.map((effort) => ({ reps_done: 6, reps_planned: 6, added_kg: 8, effort })) });
+  assert.equal(progression(sess([3, 4])).verdict, 'up');
+  const maxed = progression(sess([4, 5]));
+  assert.deepEqual([maxed.verdict, maxed.suggest_kg, maxed.maxed], ['hold', 8, true], 'wszystko ukończone, ale na maksimum');
+});
+
+test('progresja: własny krok (np. 1 kg, 1,25 kg)', () => {
+  const sess = { hang_load: { added_kg: 8 }, hang_sets: [{ reps_done: 1, reps_planned: 1, added_kg: 8 }] };
+  assert.equal(progression(sess, 1).suggest_kg, 9);
+  assert.equal(progression(sess, 1.25).suggest_kg, 9.25);
+  const fail = { hang_load: { added_kg: 8 }, hang_sets: [{ reps_done: 0, reps_planned: 2, added_kg: 8 }, { reps_done: 1, reps_planned: 2, added_kg: 8 }] };
+  assert.equal(progression(fail, 2.5).suggest_kg, 5.5);
 });

@@ -1,6 +1,6 @@
 import { getState, update, uid } from './store.js';
 import { esc, toast, today, fmtDate, monthLabel, fmtMinutes, startOfWeek, parseDate } from './ui.js';
-import { fmtAdded, fmtSets, bodyWeightOn } from './load-calc.js';
+import { fmtAdded, fmtSets, bodyWeightOn, effortOptions } from './load-calc.js';
 import {
   exerciseCatalog, lastExercise, cleanExercises, exPct, fmtExSets, bestExSet, exKey,
 } from './exercises.js';
@@ -104,13 +104,14 @@ function exListHtml(date) {
         <div class="card-head"><strong>${esc(ex.name)}</strong>
           <button type="button" class="icon" data-a="delEx" aria-label="Usuń ćwiczenie">🗑️</button></div>
         ${last ? `<p class="muted">Ostatnio (${fmtDate(last.date)}): ${esc(fmtExSets(last.exercise))}</p>` : ''}
-        <div class="ex-row ex-head"><span>Seria</span><span>Powt.</span><span>${unit}</span><span>${ex.bodyweight ? '% MC' : ''}</span><span></span></div>
+        <div class="ex-row ex-head"><span>Seria</span><span>Powt.</span><span>${unit}</span><span>${ex.bodyweight ? '% MC' : ''}</span><span title="Wysiłek 1–5">Wys.</span><span></span></div>
         ${ex.sets.map((s, j) => `
           <div class="ex-row" data-j="${j}">
             <span>${j + 1}</span>
             <input type="number" inputmode="numeric" min="0" max="999" value="${s.reps ?? ''}" data-f="reps" aria-label="Powtórzenia w serii ${j + 1}">
             <input type="number" inputmode="decimal" step="0.5" min="-200" max="500" value="${s.added_kg ?? 0}" data-f="added_kg" aria-label="Kilogramy w serii ${j + 1}">
             <span class="muted" data-pct>${ex.bodyweight && bw ? `${exPct(bw, s.added_kg)}%` : ''}</span>
+            <select data-f="effort" aria-label="Wysiłek w serii ${j + 1}">${effortOptions(s.effort ?? null)}</select>
             <button type="button" class="icon" data-a="delSet" aria-label="Usuń serię ${j + 1}">✕</button>
           </div>`).join('')}
         <button type="button" class="btn ghost small" data-a="addSet">+ Seria</button>
@@ -243,6 +244,7 @@ export function renderJournal(view) {
       const ex = draftEx[card.dataset.i];
       const set = ex.sets[row.dataset.j];
       const v = parseFloat(String(e.target.value).replace(',', '.'));
+      if (f === 'effort') { set.effort = Number.isFinite(v) ? v : null; return; }
       set[f] = Number.isFinite(v) ? v : (f === 'reps' ? null : 0);
       if (f === 'added_kg' && ex.bodyweight) {
         const bw = bodyWeightAt(dateInput.value || today());

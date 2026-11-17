@@ -38,6 +38,8 @@ app/                  ← cała aplikacja (to wgrywasz na hosting)
   js/exercises.js       ← ćwiczenia poza timerem (podciąganie, dipy, martwy ciąg…)
   js/tests.js           ← ekran testów siły (wynik, rekordy, wykres, historia)
   js/tests-calc.js      ← definicje testów siły i obliczenia
+  js/plan-calc.js       ← tygodnie, fazy i objętość planów
+  js/backup.js          ← eksport kopii i przypomnienie (obliczenia: backup-calc.js)
   js/store.js           ← zapis danych w localStorage
   js/timer.js           ← timer chwytotablicy
   js/journal.js         ← dziennik treningów

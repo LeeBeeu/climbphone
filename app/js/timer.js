@@ -2,7 +2,7 @@ import { getState, update, uid } from './store.js';
 import { esc, toast, today, fmtSeconds, fmtDuration, plural, fmtDate } from './ui.js';
 import {
   currentBodyWeight, loadFromAdded, addedFromPct, fmtAdded, BW_STALE_DAYS, PCT_MIN, PCT_MAX,
-  initSets, sessionHangLoad, fmtSets, progression,
+  initSets, sessionHangLoad, fmtSets, progression, EFFORT_LABELS, effortOptions, PROGRESS_STEPS, PROGRESS_STEP_KG,
 } from './load-calc.js';
 
 const BUILTIN = [
@@ -210,7 +210,16 @@ export function renderTimer(view) {
         ${bw?.source === 'trend' && bw.ageDays > BW_STALE_DAYS
           ? `<p class="hint">Ostatni pomiar wagi ${bw.ageDays} dni temu – zważ się, żeby % masy ciała był aktualny.</p>` : ''}
         <div id="progHint">${progressHtml(last, bw)}</div>
+        <label class="field step-field"><span>Krok progresji dla tego protokołu</span>
+          <select id="pstep">${PROGRESS_STEPS.map((v) => `<option value="${v}" ${v === progressStep() ? 'selected' : ''}>${
+            String(v).replace('.', ',')} kg</option>`).join('')}</select>
+        </label>
       </section>`;
+  }
+
+  // Krok progresji zapamiętany osobno dla każdego protokołu (np. 1 kg dla max hangs, 0,5 kg dla repeaterów).
+  function progressStep() {
+    return getState().settings.progress_steps?.[selectedId] ?? PROGRESS_STEP_KG;
   }
 
   // Ustawia dociążenie w bieżącym trybie (w trybie % – procent odpowiadający tym kilogramom).
@@ -224,7 +233,7 @@ export function renderTimer(view) {
 
   // „Ostatnio” i podpowiedź progresji z przyciskiem „Zastosuj”.
   function progressHtml(last, bw) {
-    const p = progression(last);
+    const p = progression(last, progressStep());
     if (!p) return '';
     const l = last.hang_load;
     const pct = l.pct_bw ? ` (${l.pct_bw}% MC)` : '';
@@ -234,7 +243,9 @@ export function renderTimer(view) {
     const tried = heavier.length ? `; nieudana próba ${fmtAdded(Math.max(...heavier.map((s) => s.added_kg)))}` : '';
     const advice = {
       up: `Wszystko ukończone – spróbuj <strong>${fmtAdded(p.suggest_kg)}</strong>.`,
-      hold: `Prawie wszystko – zostań przy <strong>${fmtAdded(p.suggest_kg)}</strong>.`,
+      hold: p.maxed && p.base_done >= p.base_planned
+        ? `Wszystko ukończone, ale na maksimum (wysiłek 5) – zostań przy <strong>${fmtAdded(p.suggest_kg)}</strong>.`
+        : `Prawie wszystko – zostań przy <strong>${fmtAdded(p.suggest_kg)}</strong>.`,
       down: `Mniej niż 75% powtórzeń – lżej: <strong>${fmtAdded(p.suggest_kg)}</strong>.`,
     }[p.verdict] || '';
     const current = plannedAdded(config, bw);
@@ -281,8 +292,12 @@ export function renderTimer(view) {
     });
     view.querySelector('#progHint').addEventListener('click', (e) => {
       if (!e.target.closest('#applyProg')) return;
-      setAdded(progression(lastHangLoad(selectedId)).suggest_kg);
+      setAdded(progression(lastHangLoad(selectedId), progressStep()).suggest_kg);
       renderSetup();
+    });
+    view.querySelector('#pstep').addEventListener('change', (e) => {
+      update((s) => { (s.settings.progress_steps ||= {})[selectedId] = Number(e.target.value); });
+      refreshProgress();
     });
     view.querySelector('#bw')?.addEventListener('change', (e) => {
       const v = parseFloat(String(e.target.value).replace(',', '.'));
@@ -361,6 +376,7 @@ export function renderTimer(view) {
       const s = run.sets[k - 1];
       if (a === 'rep-') s.reps_done = Math.max(0, s.reps_done - 1);
       if (a === 'rep+') s.reps_done = Math.min(s.reps_planned, s.reps_done + 1);
+      if (/^e[1-5]$/.test(a)) s.effort = s.effort === Number(a[1]) ? null : Number(a[1]); // ponowne tapnięcie czyści
       if (a === 'kg-' || a === 'kg+') {
         const next = run.sets[k];
         const v = Math.max(-100, Math.min(150, next.added_kg + (a === 'kg+' ? 0.5 : -0.5)));
@@ -425,6 +441,10 @@ export function renderTimer(view) {
         <button class="btn small" data-a="rep-" aria-label="Mniej powtórzeń">−</button>
         <b>${s.reps_done}/${s.reps_planned}</b>
         <button class="btn small" data-a="rep+" aria-label="Więcej powtórzeń">+</button></div>
+      <div class="effort-row"><span>Wysiłek</span>
+        ${[1, 2, 3, 4, 5].map((n) => `<button class="btn small ${s.effort === n ? 'active' : ''}" data-a="e${n}"
+          aria-label="Wysiłek ${n}: ${EFFORT_LABELS[n]}" aria-pressed="${s.effort === n}">${n}</button>`).join('')}</div>
+      ${s.effort ? `<p class="muted effort-label">${EFFORT_LABELS[s.effort]}</p>` : ''}
       ${next ? `<div class="set-row"><span>Dociążenie w serii ${k + 1}</span>
         <button class="btn small" data-a="kg-" aria-label="Mniej o 0,5 kg">−</button>
         <b>${fmtAdded(next.added_kg)}</b>
@@ -503,8 +523,10 @@ export function renderTimer(view) {
               <b data-reps>${s.reps_done}/${s.reps_planned}</b>
               <button class="btn small" data-a="rep+" aria-label="Więcej powtórzeń">+</button>
               <input type="number" inputmode="decimal" step="0.5" min="-100" max="150" value="${s.added_kg}" data-kg aria-label="Dociążenie serii ${s.set} w kg">
+              <select data-effort aria-label="Wysiłek w serii ${s.set}">${effortOptions(s.effort)}</select>
             </div>`).join('')}
         </div>
+        <p class="muted" style="text-align:left">Ostatnia kolumna: wysiłek 1–5 (5 = maksymalnie). Przy wysiłku 5 podpowiedź nie doda obciążenia.</p>
         <p class="muted" id="sumload" style="text-align:left"></p>
         <label class="field" style="text-align:left"><span>Notatka (chwyt, samopoczucie)</span>
           <textarea id="note" rows="2" placeholder="np. listwa 20 mm, półzaciąg"></textarea>
@@ -533,6 +555,10 @@ export function renderTimer(view) {
     });
     view.querySelector('.sets-table').addEventListener('input', (e) => {
       const row = e.target.closest('[data-set]');
+      if (row && e.target.matches('[data-effort]')) {
+        sets[row.dataset.set - 1].effort = Number(e.target.value) || null;
+        return;
+      }
       if (!row || !e.target.matches('[data-kg]')) return;
       const v = parseFloat(String(e.target.value).replace(',', '.'));
       sets[row.dataset.set - 1].added_kg = Number.isFinite(v) ? Math.max(-100, Math.min(150, v)) : 0;
@@ -553,7 +579,7 @@ export function renderTimer(view) {
         preset_id: selectedId,
         preset_name: config.name,
         hang_load: hangLoad,
-        hang_sets: sets.map(({ set, reps_planned, reps_done, added_kg }) => ({ set, reps_planned, reps_done, added_kg })),
+        hang_sets: sets.map(({ set, reps_planned, reps_done, added_kg, effort }) => ({ set, reps_planned, reps_done, added_kg, effort })),
         hang_seconds: config.hang,
         notes: [`${config.name}: ${hangsText} po ${config.hang} s`, note].filter(Boolean).join('\n'),
       }));

@@ -1,11 +1,11 @@
 // Ćwiczenia poza timerem (podciąganie z obciążeniem, dipy, martwy ciąg…). Czyste funkcje, bez DOM
 // (testy: tests/exercises.test.mjs).
 //
-// Ćwiczenie w sesji dziennika: { name, bodyweight, sets: [{ reps, added_kg }] }
+// Ćwiczenie w sesji dziennika: { name, bodyweight, sets: [{ reps, added_kg, effort }] } (effort 1–5 albo null)
 //   bodyweight = true  → added_kg to dociążenie do masy ciała (ujemne = guma / odciążenie), liczymy % MC
 //   bodyweight = false → added_kg to ciężar sztangi / hantli w kg
 // Sesja z ćwiczeniem z masą ciała zapisuje body_weight_kg = trend wagi z dnia treningu (MC-50).
-import { exKey, bestExSet, fmtAdded } from './load-calc.js';
+import { exKey, bestExSet, fmtAdded, effortSuffix } from './load-calc.js';
 
 export { exKey, bestExSet };
 
@@ -56,7 +56,11 @@ export function cleanExercises(list) {
       name: String(ex.name).trim(),
       bodyweight: !!ex.bodyweight,
       sets: (ex.sets || [])
-        .map((s) => ({ reps: Math.round(Number(s.reps)), added_kg: Math.round((Number(s.added_kg) || 0) * 10) / 10 }))
+        .map((s) => ({
+          reps: Math.round(Number(s.reps)),
+          added_kg: Math.round((Number(s.added_kg) || 0) * 10) / 10,
+          effort: s.effort >= 1 && s.effort <= 5 ? Math.round(s.effort) : null,
+        }))
         .filter((s) => Number.isFinite(s.reps) && s.reps > 0),
     }))
     .filter((ex) => ex.name && ex.sets.length);
@@ -76,5 +80,5 @@ export function fmtExSets(ex) {
     else groups.push({ n: 1, reps: s.reps, added_kg: s.added_kg });
   }
   const kg = (a) => (ex.bodyweight ? (a ? ` ${fmtAdded(a)}` : '') : ` ${kgText(a)} kg`);
-  return groups.map((g) => `${g.n}×${g.reps}${kg(g.added_kg)}`).join(', ');
+  return groups.map((g) => `${g.n}×${g.reps}${kg(g.added_kg)}`).join(', ') + effortSuffix(ex.sets);
 }

@@ -512,8 +512,10 @@ details[open] summary { margin-bottom: 8px; }
 /* Ćwiczenia poza timerem (dziennik) */
 .ex-card { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
 .ex-card p { margin: 4px 0; font-size: 13px; }
-.ex-row { display: grid; grid-template-columns: 34px 1fr 1fr 44px 32px; gap: 6px; align-items: center; margin: 4px 0; }
-.ex-row input { width: 100%; min-width: 0; }
+.ex-row { display: grid; grid-template-columns: 20px minmax(0,1fr) minmax(0,1fr) 34px 44px 24px; gap: 4px; align-items: center; margin: 4px 0; }
+.ex-row input, .ex-row select { width: 100%; min-width: 0; padding-left: 6px; padding-right: 4px; }
+.ex-row .icon { min-width: 0; width: 24px; padding: 0; }
+.sets-table .set-row select, .effort-row { min-width: 0; }
 .ex-head { font-size: 12px; color: var(--muted); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -534,3 +536,34 @@ details[open] summary { margin-bottom: 8px; }
   box-shadow: 0 4px 16px rgba(0,0,0,.3); font-weight: 600;
 }
 .update-bar .btn { background: #fff; color: var(--accent); border: 0; }
+
+/* Przypomnienie o kopii zapasowej */
+.backup-card { border-left: 4px solid var(--fl); }
+.backup-card p { margin: 4px 0 8px; }
+
+/* Wysiłek 1–5 */
+.effort-row { display: grid; grid-template-columns: 1fr repeat(5, 40px); gap: 6px; align-items: center; padding: 4px 0; text-align: left; }
+.effort-row .btn.small { min-height: 40px; padding: 0; }
+.effort-row .btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.effort-label { margin: 0; text-align: right; font-size: 12px; }
+.sets-table .set-row { grid-template-columns: 1fr 36px 44px 36px 64px 48px; }
+
+/* Plany: tygodnie, fazy, objętość */
+.week-nav { display: grid; grid-template-columns: 48px 1fr 48px; gap: 10px; align-items: center; text-align: center; margin: 6px 0; }
+.week-nav .btn.small { min-height: 44px; font-size: 22px; padding: 0; }
+.phase-chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--surface2); color: var(--text); }
+.phase-base { background: #3b82f6; color: #fff; }
+.phase-strength { background: var(--rp); color: #fff; }
+.phase-power { background: var(--danger); color: #fff; }
+.phase-endurance { background: var(--ok); color: #06261a; }
+.phase-peak { background: var(--fl); color: #2a2000; }
+.phase-taper { background: #a78bfa; color: #fff; }
+.phase-deload, .phase-rest { background: var(--surface2); color: var(--muted); }
+.vol { display: flex; flex-direction: column; gap: 4px; }
+.vol-row { display: grid; grid-template-columns: 34px 92px 1fr auto; gap: 8px; align-items: center; padding: 6px 4px;
+  background: none; border: 0; border-radius: 8px; color: inherit; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.vol-row.current { background: var(--surface2); font-weight: 600; }
+.vol-row .meter { display: block; }
+.vol-row .meter > span { display: block; height: 100%; background: var(--ok); }
+.vol-w { color: var(--muted); }
+.vol-n { white-space: nowrap; color: var(--muted); }

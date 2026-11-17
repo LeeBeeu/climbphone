@@ -32,7 +32,9 @@ test('czyszczenie formularza: liczby, puste serie i ćwiczenia odpadają', () =>
     { name: ' Podciąganie ', bodyweight: true, sets: [{ reps: '5', added_kg: '20' }, { reps: '', added_kg: '20' }, { reps: '0', added_kg: 5 }] },
     { name: 'Dipy', bodyweight: true, sets: [{ reps: '', added_kg: 0 }] },
   ]);
-  assert.deepEqual(out, [{ name: 'Podciąganie', bodyweight: true, sets: [{ reps: 5, added_kg: 20 }] }]);
+  assert.deepEqual(out, [{ name: 'Podciąganie', bodyweight: true, sets: [{ reps: 5, added_kg: 20, effort: null }] }]);
+  assert.equal(cleanExercises([{ name: 'Dipy', sets: [{ reps: 8, added_kg: 0, effort: 4 }] }])[0].sets[0].effort, 4);
+  assert.equal(fmtExSets({ bodyweight: true, sets: [{ reps: 5, added_kg: 20, effort: 3 }, { reps: 5, added_kg: 20, effort: 5 }] }), '2×5 +20 kg · wysiłek 4/5');
 });
 
 test('najcięższa seria, % MC i tekst serii', () => {

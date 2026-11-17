@@ -5,6 +5,7 @@ import * as W from './weight-calc.js';
 import { parseWeightCsv, splitDuplicates, toWeightCsv } from './weight-csv.js';
 import { strengthProtocols, strengthSeries, fmtAdded } from './load-calc.js';
 import { testStrengthEntries } from './tests-calc.js';
+import { backupReminderHtml, bindBackupReminder } from './backup.js';
 
 const RANGES = [['14', '2 tyg.'], ['90', '3 mies.'], ['365', 'Rok'], ['all', 'Całość']];
 const STATUS = {
@@ -490,6 +491,7 @@ export function renderWeight(view) {
   function render() {
     model = computeModel();
     view.innerHTML = `
+      ${backupReminderHtml()}
       ${entryHtml(model)}
       ${summaryHtml(model)}
       <section class="card">
@@ -519,6 +521,7 @@ export function renderWeight(view) {
   }
 
   function bind() {
+    bindBackupReminder(view, render);
     const $ = (sel) => view.querySelector(sel);
     let whenTouched = false;
     $('#when').addEventListener('input', () => { whenTouched = true; });

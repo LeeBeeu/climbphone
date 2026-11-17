@@ -137,9 +137,23 @@ export function strengthSeries(sessions, key, weightSeries = [], extra = []) {
 
 export function initSets(count, reps, addedKg) {
   return Array.from({ length: count }, (_, i) => ({
-    set: i + 1, reps_planned: reps, reps_done: null, added_kg: Number(addedKg) || 0,
+    set: i + 1, reps_planned: reps, reps_done: null, added_kg: Number(addedKg) || 0, effort: null,
   }));
 }
+
+// Wysiłek serii w skali 1–5 (jak w Lattice): 5 = maksymalnie, nic w zapasie.
+export const EFFORT_LABELS = ['', 'bardzo lekko', 'lekko', 'średnio', 'ciężko', 'maksymalnie'];
+
+// Średni wysiłek z serii, które go mają (1 miejsce po przecinku) albo null.
+export function avgEffort(sets) {
+  const e = (sets || []).map((s) => s.effort).filter((x) => x >= 1 && x <= 5);
+  return e.length ? Math.round((e.reduce((a, b) => a + b, 0) / e.length) * 10) / 10 : null;
+}
+
+const effortSuffix = (sets) => {
+  const a = avgEffort(sets);
+  return a === null ? '' : ` · wysiłek ${String(a).replace('.', ',')}/5`;
+};
 
 // Najcięższa seria z choć jednym ukończonym powtórzeniem (przy remisie – więcej powtórzeń).
 export function bestSet(sets) {
@@ -162,13 +176,16 @@ export function fmtSets(sets) {
   if (!sets?.length) return '';
   const same = sets.every((s) => s.added_kg === sets[0].added_kg);
   const reps = (s) => `${s.reps_done ?? 0}/${s.reps_planned}`;
-  return same
+  return (same
     ? `${sets.map(reps).join(' · ')} (${fmtAdded(sets[0].added_kg)})`
-    : sets.map((s) => `${reps(s)} ${fmtAdded(s.added_kg)}`).join(' · ');
+    : sets.map((s) => `${reps(s)} ${fmtAdded(s.added_kg)}`).join(' · ')) + effortSuffix(sets);
 }
+
+export { effortSuffix };
 
 // ---------- Wstępne wypełnienie i progresja z poprzedniej sesji ----------
 export const PROGRESS_STEP_KG = 0.5;
+export const PROGRESS_STEPS = [0.5, 1, 1.25, 2, 2.5, 5];
 export const HOLD_RATIO = 0.75; // ≥ 75% powtórzeń: zostajemy przy obciążeniu; mniej: lżej
 
 // Na podstawie ostatniej sesji z protokołem:
@@ -188,9 +205,20 @@ export function progression(session, step = PROGRESS_STEP_KG) {
   const dBase = atBase.reduce((t, s) => t + (s.reps_done || 0), 0);
   let verdict = null;
   if (pBase > 0) verdict = dBase >= pBase ? 'up' : dBase / pBase >= HOLD_RATIO ? 'hold' : 'down';
+  // Wszystko ukończone, ale któraś seria na maksimum (wysiłek 5) – nie dokładamy, zostajemy.
+  const maxed = atBase.some((s) => s.effort === 5);
+  if (verdict === 'up' && maxed) verdict = 'hold';
   const delta = { up: step, hold: 0, down: -step }[verdict] ?? 0;
   return {
-    base_kg: base, verdict, suggest_kg: roundTo(base + delta, step),
-    done, planned, base_done: dBase, base_planned: pBase, date: session.date,
+    // Bez przyciągania do siatki kroku: przy kroku 1,25 kg z bazy 8 kg ma wyjść 9,25, a nie 8,75.
+    base_kg: base, verdict, suggest_kg: Math.round((base + delta) * 100) / 100 + 0,
+    done, planned, base_done: dBase, base_planned: pBase, date: session.date, maxed,
   };
+}
+
+// Opcje listy wyboru wysiłku (–, 1–5) dla formularzy timera i dziennika.
+export function effortOptions(selected) {
+  return ['<option value="">–</option>',
+    ...[1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${selected === n ? 'selected' : ''} title="${EFFORT_LABELS[n]}">${n}</option>`),
+  ].join('');
 }

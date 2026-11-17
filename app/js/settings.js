@@ -2,6 +2,8 @@ import { getState, update, replaceState } from './store.js';
 import { esc, toast, today, pwa } from './ui.js';
 import { systemsFor } from './grades.js';
 import { parse8a, merge8a } from './import8a.js';
+import { exportBackup } from './backup.js';
+import { backupStatus, sinceText, REMINDER_OPTIONS } from './backup-calc.js';
 
 export function renderSettings(view) {
   function importEightA(json) {
@@ -58,6 +60,13 @@ export function renderSettings(view) {
         <p class="muted">Dane są zapisane tylko na tym urządzeniu, w pamięci przeglądarki.
           Eksportuj je regularnie. Plik JSON pozwala też przenieść dane między komputerem a telefonem.</p>
         <p class="muted">Zapisane: ${st.weightEntries.length} pomiarów wagi, ${st.sessions.length} treningów, ${st.ascents.length} przejść, ${st.plans.length} planów.</p>
+        <p class="muted">Ostatnia kopia: <strong>${sinceText(backupStatus(st).daysSince)}</strong></p>
+        <label class="field"><span>Przypominaj o kopii</span>
+          <select id="backupEvery">
+            ${REMINDER_OPTIONS.map((d) => `<option value="${d}" ${d === (st.settings.backup_reminder_days ?? 7) ? 'selected' : ''}>${
+              d ? `co ${d} dni` : 'nie przypominaj'}</option>`).join('')}
+          </select>
+        </label>
         <div class="row">
           <button class="btn" id="export">⬇️ Eksportuj</button>
           <button class="btn" id="import">⬆️ Importuj</button>
@@ -139,13 +148,10 @@ export function renderSettings(view) {
       toast('Zapisano');
     });
 
-    view.querySelector('#export').addEventListener('click', () => {
-      const blob = new Blob([JSON.stringify(getState(), null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `climbphone-${today()}.json`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    view.querySelector('#export').addEventListener('click', () => { exportBackup(); render(); });
+    view.querySelector('#backupEvery').addEventListener('change', (e) => {
+      update((s) => { s.settings.backup_reminder_days = Number(e.target.value); });
+      toast('Zapisano');
     });
 
     const fileInput = view.querySelector('#file');
