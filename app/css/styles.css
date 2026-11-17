@@ -442,6 +442,7 @@ details[open] summary { margin-bottom: 8px; }
 .info b { color: var(--text); }
 
 .chart { touch-action: pan-y; user-select: none; cursor: grab; min-height: 230px; }
+#schart { min-height: 150px; }
 .chart svg { display: block; }
 .ch-grid { stroke: var(--border); stroke-width: 1; }
 .ch-label { fill: var(--muted); font-size: 11px; font-family: inherit; }
@@ -456,6 +457,13 @@ details[open] summary { margin-bottom: 8px; }
 .lg-trend { width: 16px; height: 3px; background: var(--accent); }
 .lg-goal { width: 16px; height: 10px; background: var(--ok); opacity: .35; }
 .lg-fc { width: 16px; border-top: 2px dashed var(--accent); }
+.sub-title { margin: 14px 0 6px; font-size: 16px; }
+.card-head select { max-width: 55%; }
+.ch-strength { fill: none; stroke: var(--rp); stroke-width: 2; stroke-linejoin: round; }
+.ch-sdot { fill: var(--rp); stroke: var(--surface); stroke-width: 1.5; }
+.ch-bw { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; opacity: .8; }
+.lg-sdot { width: 8px; height: 8px; border-radius: 50%; background: var(--rp); }
+.lg-bw { width: 16px; border-top: 1px dashed var(--muted); }
 
 .w-row {
   display: grid;

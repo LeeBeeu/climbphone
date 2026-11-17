@@ -3,6 +3,7 @@ import { getState, update, uid } from './store.js';
 import { esc, toast, plural, parseDate, monthLabel, today as todayKey } from './ui.js';
 import * as W from './weight-calc.js';
 import { parseWeightCsv, splitDuplicates, toWeightCsv } from './weight-csv.js';
+import { strengthProtocols, strengthSeries, fmtAdded } from './load-calc.js';
 
 const RANGES = [['14', '2 tyg.'], ['90', '3 mies.'], ['365', 'Rok'], ['all', 'Całość']];
 const STATUS = {
@@ -24,6 +25,7 @@ let listLimit = PAGE;
 let editingId = null;
 let goalFormOpen = false;
 let pendingImport = null;
+let strengthPreset = null; // protokół na wykresie siły względnej
 
 const kg = (v, digits = 1) => (v === null || v === undefined ? '–' : v.toFixed(digits).replace('.', ','));
 const signedKg = (v, digits = 1) =>
@@ -61,7 +63,15 @@ function computeModel() {
     forecast: last ? W.forecast(series, v, goal, today) : null,
     plateau: !!goal && status !== 'in_goal' && W.isPlateau(series),
     stale: last ? W.dayNumber(today) - last.day > STALE_DAYS : false,
+    ...strengthModel(st.sessions, series),
   };
+}
+
+// Siła względna (MC-52): sesje z timera z zapisanym obciążeniem, wybrany protokół.
+function strengthModel(sessions, series) {
+  const protocols = strengthProtocols(sessions);
+  if (!protocols.some((p) => p.id === strengthPreset)) strengthPreset = protocols[0]?.id ?? null;
+  return { protocols, strength: strengthPreset ? strengthSeries(sessions, strengthPreset, series) : [] };
 }
 
 // ---------- Wpis pomiaru (MC-01…MC-05) ----------
@@ -270,8 +280,84 @@ function drawChart(el, m) {
   el.innerHTML = svg;
 }
 
-// Przewijanie wykresu w poziomie palcem lub myszą (MC-30).
-function bindPan(el, m) {
+// Wykres siły względnej (MC-52): ta sama oś czasu co wykres wagi, żeby oba czytać razem.
+const PCT_STEPS = [1, 2, 5, 10, 20, 25, 50];
+
+function drawStrength(el, m) {
+  if (!el) return;
+  const width = Math.max(260, el.clientWidth);
+  const height = 150;
+  const pad = { l: 38, r: 10, t: 10, b: 24 };
+  const { start, end } = chartWindow(m);
+  const pts = m.strength;
+  const inside = pts.filter((p) => p.day >= start && p.day <= end);
+  // Linia łączy też punkty tuż za krawędziami, żeby nie urywała się na brzegu wykresu.
+  const first = pts.findIndex((p) => p.day >= start);
+  const lastIn = pts.findLastIndex((p) => p.day <= end);
+  const linePts = pts.slice(Math.max(0, (first === -1 ? pts.length : first) - 1), lastIn + 2);
+
+  const ys = (inside.length ? inside : linePts).map((p) => p.pct_bw);
+  if (!ys.length) ys.push(100);
+  let lo = Math.min(...ys) - 2;
+  let hi = Math.max(...ys) + 2;
+  const step = PCT_STEPS.find((s) => (hi - lo) / s <= 4) || 50;
+  lo = Math.floor(lo / step) * step;
+  hi = Math.ceil(hi / step) * step;
+
+  const X = (d) => pad.l + ((d - start) / (end - start)) * (width - pad.l - pad.r);
+  const Y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * (height - pad.t - pad.b);
+  const today = W.dayNumber(m.today);
+
+  let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img"
+    aria-label="Wykres siły względnej w procentach masy ciała"><defs><clipPath id="plotS"><rect x="${pad.l}" y="0" width="${width - pad.l - pad.r}" height="${height}"/></clipPath></defs>`;
+  for (let v = lo; v <= hi + 1e-9; v += step) {
+    svg += `<line class="ch-grid" x1="${pad.l}" x2="${width - pad.r}" y1="${Y(v)}" y2="${Y(v)}"/>
+      <text class="ch-label" x="${pad.l - 6}" y="${Y(v) + 4}" text-anchor="end">${v}%</text>`;
+  }
+  for (const [d, label] of xTicks(start, end, Math.max(2, Math.floor((width - pad.l - pad.r) / 62)))) {
+    svg += `<text class="ch-label" x="${X(d)}" y="${height - 6}" text-anchor="middle">${label}</text>`;
+  }
+  svg += '<g clip-path="url(#plotS)">';
+  if (100 >= lo && 100 <= hi) {
+    svg += `<line class="ch-bw" x1="${pad.l}" x2="${width - pad.r}" y1="${Y(100)}" y2="${Y(100)}"/>`;
+  }
+  if (today >= start && today <= end) {
+    svg += `<line class="ch-today" x1="${X(today)}" x2="${X(today)}" y1="${pad.t}" y2="${height - pad.b}"/>`;
+  }
+  if (linePts.length > 1) {
+    svg += `<polyline class="ch-strength" points="${linePts.map((p) => `${X(p.day)},${Y(p.pct_bw)}`).join(' ')}"/>`;
+  }
+  svg += inside.map((p) => `<circle class="ch-sdot" cx="${X(p.day)}" cy="${Y(p.pct_bw)}" r="3.5">
+    <title>${fmtDay(p.date)}: ${String(p.pct_bw).replace('.', ',')}% MC · ${fmtAdded(p.added_kg)} przy ${kg(p.body_weight_kg)} kg</title></circle>`).join('');
+  svg += '</g>';
+  if (!inside.length) {
+    svg += `<text class="ch-label" x="${(pad.l + width - pad.r) / 2}" y="${height / 2}" text-anchor="middle">Brak treningów z tym protokołem w tym zakresie</text>`;
+  }
+  el.innerHTML = `${svg}</svg>`;
+}
+
+function strengthHtml(m) {
+  if (!m.protocols.length) {
+    return `<h3 class="sub-title">Siła względna</h3>
+      <p class="muted">Zapisz trening z timera z ustawionym obciążeniem, a tutaj zobaczysz obciążenie w % masy ciała obok trendu wagi.</p>`;
+  }
+  const last = m.strength.at(-1);
+  const best = m.strength.reduce((b, p) => (!b || p.pct_bw > b.pct_bw ? p : b), null);
+  const pct = (v) => `${String(v).replace('.', ',')}%`;
+  return `
+    <div class="card-head"><h3 class="sub-title">Siła względna <small class="muted">(% masy ciała)</small></h3>
+      <select id="sPreset" aria-label="Protokół">
+        ${m.protocols.map((p) => `<option value="${esc(p.id)}" ${p.id === strengthPreset ? 'selected' : ''}>${esc(p.name)} (${p.count})</option>`).join('')}
+      </select>
+    </div>
+    <div class="chart" id="schart"></div>
+    ${last ? `<p class="muted">Ostatnio ${fmtDay(last.date)}: <strong>${pct(last.pct_bw)}</strong> (${fmtAdded(last.added_kg)} przy ${kg(last.body_weight_kg)} kg)
+      · najlepiej ${pct(best.pct_bw)} (${fmtDay(best.date)})</p>` : ''}
+    <p class="muted legend"><span class="lg-sdot"></span>trening (najwyższy % dnia) <span class="lg-bw"></span>100% = sama masa ciała</p>`;
+}
+
+// Przewijanie wykresu w poziomie palcem lub myszą (MC-30). `redraw` rysuje oba wykresy.
+function bindPan(el, redraw) {
   let x0 = null;
   let pan0 = 0;
   let frame = 0;
@@ -287,7 +373,7 @@ function bindPan(el, m) {
     panDays = Math.round(pan0 + (e.clientX - x0) / pxPerDay);
     panDays = Math.max(-Number(range), panDays);
     cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => drawChart(el, m));
+    frame = requestAnimationFrame(redraw);
   });
   const stop = () => { x0 = null; };
   el.addEventListener('pointerup', stop);
@@ -413,14 +499,22 @@ export function renderWeight(view) {
         <div class="chart" id="chart"></div>
         <p class="muted legend"><span class="lg-dot"></span>pomiar <span class="lg-trend"></span>trend
           ${model.goal ? '<span class="lg-goal"></span>cel <span class="lg-fc"></span>prognoza' : ''}</p>
+        ${strengthHtml(model)}
       </section>
       ${goalHtml(model)}
       ${listHtml(model)}
       ${dataHtml()}`;
     bind();
-    const chart = view.querySelector('#chart');
-    drawChart(chart, model);
-    bindPan(chart, model);
+    drawAll();
+    bindPan(view.querySelector('#chart'), drawAll);
+    const schart = view.querySelector('#schart');
+    if (schart) bindPan(schart, drawAll);
+  }
+
+  function drawAll() {
+    if (!model) return;
+    drawChart(view.querySelector('#chart'), model);
+    drawStrength(view.querySelector('#schart'), model);
   }
 
   function bind() {
@@ -476,7 +570,11 @@ export function renderWeight(view) {
     }));
     $('#today').addEventListener('click', () => {
       panDays = 0;
-      drawChart($('#chart'), model);
+      drawAll();
+    });
+    $('#sPreset')?.addEventListener('change', (e) => {
+      strengthPreset = e.target.value;
+      render();
     });
 
     $('#editGoal')?.addEventListener('click', () => { goalFormOpen = true; render(); });
@@ -554,7 +652,7 @@ export function renderWeight(view) {
     });
   }
 
-  const onResize = () => model && drawChart(view.querySelector('#chart'), model);
+  const onResize = () => drawAll();
   window.addEventListener('resize', onResize);
   render();
   return () => window.removeEventListener('resize', onResize);

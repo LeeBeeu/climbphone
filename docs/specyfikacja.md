@@ -127,7 +127,7 @@ Moduł ma jeden ekran „Waga” (ekran startowy) z sekcjami: wpis, kafel, wykre
 | --- | --- | --- | --- |
 | MC-50 | Aktualna masa w treningu = trend z dnia treningu (nie pojedynczy pomiar) | v2 | ✅ Timer bierze trend z ostatniego pomiaru (`currentBodyWeight()` w `load-calc.js`); gdy pomiar ma ponad 7 dni, prosi o zważenie się; bez pomiarów masę wpisuje się w timerze. |
 | MC-51 | Przy zwisach i podciąganiu z obciążeniem: obciążenie łączne = masa + dodatkowy ciężar, oraz % masy ciała | v2 | 🟡 Zwisy: w timerze dociążenie w kg (ujemne = odciążenie na bloczku) albo cel w % masy ciała przeliczany na kg z krokiem 0,5 kg; obciążenie widać w trakcie treningu, w podsumowaniu można poprawić faktyczne dociążenie; sesja w dzienniku zapisuje `hang_load` {`body_weight_kg`, `added_kg`, `total_kg`, `pct_bw`} z masą „zamrożoną” w dniu treningu; timer podpowiada ostatnie obciążenie z tym protokołem. Podciąganie: razem z logowaniem serii (Etap 2). |
-| MC-52 | Wykres siły względnej (np. max zwis na 20 mm w % masy) obok trendu wagi | v2 | ⬜ Razem z testami (Etap 3). |
+| MC-52 | Wykres siły względnej (np. max zwis na 20 mm w % masy) obok trendu wagi | v2 | 🟡 Pod wykresem wagi, ta sama oś czasu, zakres i przewijanie; wybór protokołu z timera; punkt = najwyższy % MC dnia (`strengthSeries()`), linia 100% = sama masa ciała; ostatni i najlepszy wynik. Sesja bez zapisanej masy bierze trend z dnia treningu. Wyniki testów (np. max zwis na 20 mm) dojdą w Etapie 3. |
 
 **Import i eksport**
 
@@ -233,7 +233,7 @@ Po masie ciała budujemy rdzeń treningowy (Etap 2), potem plan i testy (Etap 3)
 | --- | --- | --- |
 | NF-01 | Offline-first: każdy wpis zapisuje się lokalnie natychmiast; synchronizacja, jeśli będzie, działa w tle | ✅ (bez synchronizacji) |
 | NF-02 | Kod w lokalnym repozytorium Git; dane użytkownika poza repozytorium | ✅ `data/` w `.gitignore` |
-| NF-03 | Ta sama logika obliczeń na komputerze i telefonie, z testami jednostkowymi | ✅ dla wagi i obciążenia: 24 testy (`npm test`), w tym porównanie z prawdziwym eksportem Libry, gdy jest `data/libra.csv` |
+| NF-03 | Ta sama logika obliczeń na komputerze i telefonie, z testami jednostkowymi | ✅ dla wagi i obciążenia: 25 testów (`npm test`), w tym porównanie z prawdziwym eksportem Libry, gdy jest `data/libra.csv` |
 | NF-04 | Dźwięki timera niezależne od obciążenia aplikacji; ekran nie gaśnie w trakcie treningu | 🟡 Blokada ekranu jest; dźwięki do zaplanowania z wyprzedzeniem (Etap 2) |
 | NF-05 | Przywracanie stanu: ostatni ekran, niezapisany wpis, przerwany trening (do 3 godzin) | ⬜ |
 | NF-06 | Jasny i ciemny motyw z jednego zestawu tokenów kolorów | ✅ |

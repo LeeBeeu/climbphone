@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  loadFromAdded, addedFromPct, hangLoadRecord, fmtAdded, roundTo, currentBodyWeight,
+  loadFromAdded, addedFromPct, hangLoadRecord, fmtAdded, roundTo, currentBodyWeight, strengthSeries, strengthProtocols,
 } from '../app/js/load-calc.js';
 
 const SETTINGS = { weight_trend_method: 'libra', weight_trend_tau_days: 7, weight_daily_mode: 'first' };
@@ -54,4 +54,25 @@ test('masa ciała z trendu zakładki Waga i wiek pomiaru', () => {
   assert.equal(bw.last_kg, 81);
   assert.equal(bw.date, '2026-11-02');
   assert.equal(bw.ageDays, 10);
+});
+
+test('siła względna: punkt na dzień, najwyższy % MC, masa z sesji albo z trendu (MC-52)', () => {
+  const sessions = [
+    { date: '2026-11-03', preset_id: 'b-max', preset_name: 'Max hangs', hang_load: { body_weight_kg: 80, added_kg: 8 } },
+    { date: '2026-11-03', preset_id: 'b-max', hang_load: { body_weight_kg: 80, added_kg: 10 } },
+    { date: '2026-11-10', preset_id: 'b-max', hang_load: { body_weight_kg: null, added_kg: 10 } },
+    { date: '2026-11-12', preset_id: 'b-repeaters', preset_name: 'Repeaters', hang_load: { body_weight_kg: 80, added_kg: 0 } },
+    { date: '2026-11-13', preset_id: 'b-max', notes: 'bez obciążenia' },
+  ];
+  const weightSeries = [{ date: '2026-11-08', day: 0, trend: 78 }].map((p) => ({ ...p, day: Date.UTC(2026, 10, 8) / 864e5 }));
+  const s = strengthSeries(sessions, 'b-max', weightSeries);
+  assert.equal(s.length, 2);
+  assert.equal(s[0].pct_bw, 112.5);           // (80 + 10) / 80
+  assert.equal(s[1].body_weight_kg, 78);       // brak masy w sesji → trend z 8.11
+  assert.equal(s[1].pct_bw, 112.8);           // 88 / 78
+  assert.deepEqual(strengthSeries(sessions, 'b-max', []).length, 1, 'bez trendu sesja bez masy jest pomijana');
+
+  const protos = strengthProtocols(sessions);
+  assert.deepEqual(protos.map((p) => [p.id, p.count]), [['b-repeaters', 1], ['b-max', 3]]);
+  assert.equal(protos[1].name, 'Max hangs');
 });

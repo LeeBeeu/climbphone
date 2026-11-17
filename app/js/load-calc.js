@@ -4,7 +4,7 @@
 //   obciążenie = masa ciała + dociążenie        (odciążenie na bloczku = dociążenie ujemne)
 //   % MC       = obciążenie / masa ciała · 100
 // Przykład: 80 kg, +8 kg → 88 kg = 110% MC; 80 kg, −20 kg → 60 kg = 75% MC.
-import { buildSeries, dayNumber, dayKey } from './weight-calc.js';
+import { buildSeries, dayNumber, dayKey, trendAt } from './weight-calc.js';
 
 export const LOAD_STEP_KG = 0.5;      // krok odważników przy przeliczaniu % → kg
 export const BW_STALE_DAYS = 7;       // starsza masa ciała: pokazujemy ostrzeżenie
@@ -55,4 +55,43 @@ export function fmtAdded(addedKg) {
   const a = round1(Number(addedKg) || 0);
   if (a === 0) return 'bez dociążenia';
   return `${a > 0 ? '+' : '−'}${String(Math.abs(a)).replace('.', ',')} kg`;
+}
+
+// ---------- Siła względna w czasie (MC-52) ----------
+
+// Protokoły z zapisanym obciążeniem, od ostatnio używanego: [{ id, name, count, last }]
+export function strengthProtocols(sessions) {
+  const map = new Map();
+  for (const s of sessions) {
+    if (!s.hang_load || !s.preset_id) continue;
+    const p = map.get(s.preset_id) || { id: s.preset_id, name: s.preset_name || 'Protokół', count: 0, last: '' };
+    p.count++;
+    if (s.date >= p.last) { p.last = s.date; if (s.preset_name) p.name = s.preset_name; }
+    map.set(s.preset_id, p);
+  }
+  return [...map.values()].sort((a, b) => b.last.localeCompare(a.last));
+}
+
+// Seria siły względnej dla protokołu: jeden punkt na dzień (najwyższy % MC tego dnia).
+// Masa ciała z sesji; gdy jej brak (trening bez pomiarów), bierzemy trend wagi z dnia treningu.
+export function strengthSeries(sessions, presetId, weightSeries = []) {
+  const byDay = new Map();
+  for (const s of sessions) {
+    const l = s.hang_load;
+    if (!l || s.preset_id !== presetId) continue;
+    const bw = l.body_weight_kg ?? trendAt(weightSeries, s.date)?.trend ?? null;
+    if (!(bw > 0)) continue;
+    const added = Number(l.added_kg) || 0;
+    const point = {
+      date: s.date,
+      day: dayNumber(s.date),
+      pct_bw: Math.round(((bw + added) / bw) * 1000) / 10,
+      added_kg: added,
+      body_weight_kg: round1(bw),
+      total_kg: round1(bw + added),
+    };
+    const prev = byDay.get(s.date);
+    if (!prev || point.pct_bw > prev.pct_bw) byDay.set(s.date, point);
+  }
+  return [...byDay.values()].sort((a, b) => a.day - b.day);
 }
