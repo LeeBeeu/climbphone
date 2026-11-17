@@ -2,7 +2,7 @@ import { getState, update, uid } from './store.js';
 import { esc, toast, today, fmtSeconds, fmtDuration, plural, fmtDate } from './ui.js';
 import {
   currentBodyWeight, loadFromAdded, addedFromPct, fmtAdded, BW_STALE_DAYS, PCT_MIN, PCT_MAX,
-  initSets, sessionHangLoad, fmtSets,
+  initSets, sessionHangLoad, fmtSets, progression,
 } from './load-calc.js';
 
 const BUILTIN = [
@@ -50,6 +50,7 @@ const LABELS = { prep: 'Przygotuj się', hang: 'Zwis', rest: 'Odpoczynek', setre
 // Wybór zapamiętany między przełączeniami zakładek.
 let selectedId = BUILTIN[0].id;
 let config = { ...LOAD_DEFAULTS, ...BUILTIN[0] };
+let prefilledFor = null; // protokół, dla którego obciążenie wypełniono już z ostatniej sesji
 
 function buildPhases(p) {
   const phases = [];
@@ -113,6 +114,12 @@ export function renderTimer(view) {
 
   function renderSetup() {
     const isCustom = !selectedId.startsWith('b-');
+    // Wstępne wypełnienie: start od obciążenia z ostatniego treningu tym protokołem (raz na wybór protokołu).
+    if (prefilledFor !== selectedId) {
+      prefilledFor = selectedId;
+      const p = progression(lastHangLoad(selectedId));
+      if (p) setAdded(p.base_kg);
+    }
     view.innerHTML = `
       <section class="card">
         <label class="field"><span>Protokół</span>
@@ -139,6 +146,7 @@ export function renderTimer(view) {
     view.querySelector('#preset').addEventListener('change', (e) => {
       selectedId = e.target.value;
       config = { ...LOAD_DEFAULTS, ...presets().find((p) => p.id === selectedId) };
+      prefilledFor = null; // świeże ustawienia protokołu → wypełnij ponownie z ostatniej sesji
       renderSetup();
     });
 
@@ -186,7 +194,6 @@ export function renderTimer(view) {
       ? `<p class="muted">Masa ciała: <strong>${kgText(bw.kg)} kg</strong> <small>(trend z zakładki Waga, ${fmtDate(bw.date)})</small></p>`
       : `<label class="field"><span>Masa ciała (kg) <small>– brak pomiarów w zakładce Waga</small></span>
           <input type="number" id="bw" inputmode="decimal" step="0.1" min="30" max="200" value="${bw?.kg ?? ''}" placeholder="np. 75"></label>`;
-    const lastLoad = last?.hang_load;
     return `
       <section class="card">
         <h2>Obciążenie</h2>
@@ -202,9 +209,39 @@ export function renderTimer(view) {
         <p id="lout"></p>
         ${bw?.source === 'trend' && bw.ageDays > BW_STALE_DAYS
           ? `<p class="hint">Ostatni pomiar wagi ${bw.ageDays} dni temu – zważ się, żeby % masy ciała był aktualny.</p>` : ''}
-        ${lastLoad ? `<p class="muted">Ostatnio z tym protokołem (${fmtDate(last.date)}): ${fmtAdded(lastLoad.added_kg)}${
-          lastLoad.pct_bw ? ` · ${lastLoad.pct_bw}% MC przy ${kgText(lastLoad.body_weight_kg)} kg` : ''}</p>` : ''}
+        <div id="progHint">${progressHtml(last, bw)}</div>
       </section>`;
+  }
+
+  // Ustawia dociążenie w bieżącym trybie (w trybie % – procent odpowiadający tym kilogramom).
+  function setAdded(kgValue, bw = bodyWeight()) {
+    if (config.load_mode === 'pct') {
+      if (bw) config.load_pct = Math.round(((bw.kg + kgValue) / bw.kg) * 1000) / 10;
+    } else {
+      config.added_kg = kgValue;
+    }
+  }
+
+  // „Ostatnio” i podpowiedź progresji z przyciskiem „Zastosuj”.
+  function progressHtml(last, bw) {
+    const p = progression(last);
+    if (!p) return '';
+    const l = last.hang_load;
+    const pct = l.pct_bw ? ` (${l.pct_bw}% MC)` : '';
+    // Powtórzenia liczymy w seriach z tym obciążeniem; nieudane cięższe próby wymieniamy osobno.
+    const reps = p.base_planned ? `, ${p.base_done}/${p.base_planned} powtórzeń` : '';
+    const heavier = (last.hang_sets || []).filter((s) => s.added_kg > p.base_kg);
+    const tried = heavier.length ? `; nieudana próba ${fmtAdded(Math.max(...heavier.map((s) => s.added_kg)))}` : '';
+    const advice = {
+      up: `Wszystko ukończone – spróbuj <strong>${fmtAdded(p.suggest_kg)}</strong>.`,
+      hold: `Prawie wszystko – zostań przy <strong>${fmtAdded(p.suggest_kg)}</strong>.`,
+      down: `Mniej niż 75% powtórzeń – lżej: <strong>${fmtAdded(p.suggest_kg)}</strong>.`,
+    }[p.verdict] || '';
+    const current = plannedAdded(config, bw);
+    const button = p.verdict && current !== p.suggest_kg
+      ? `<button class="btn small" id="applyProg">Zastosuj ${fmtAdded(p.suggest_kg)}</button>` : '';
+    return `<p class="muted">Ostatnio (${fmtDate(p.date)}): ${fmtAdded(p.base_kg)}${pct}${reps}${tried}.</p>
+      ${advice ? `<p class="hint">${advice} ${button}</p>` : ''}`;
   }
 
   function updateLoadOut() {
@@ -240,6 +277,12 @@ export function renderTimer(view) {
       if (config.load_mode === 'pct') config.load_pct = Number.isFinite(v) ? Math.max(PCT_MIN, Math.min(PCT_MAX, v)) : 100;
       else config.added_kg = Number.isFinite(v) ? Math.max(-100, Math.min(150, v)) : 0;
       updateLoadOut();
+      refreshProgress();
+    });
+    view.querySelector('#progHint').addEventListener('click', (e) => {
+      if (!e.target.closest('#applyProg')) return;
+      setAdded(progression(lastHangLoad(selectedId)).suggest_kg);
+      renderSetup();
     });
     view.querySelector('#bw')?.addEventListener('change', (e) => {
       const v = parseFloat(String(e.target.value).replace(',', '.'));
@@ -247,6 +290,11 @@ export function renderTimer(view) {
       updateLoadOut();
     });
     updateLoadOut();
+  }
+
+  function refreshProgress() {
+    const el = view.querySelector('#progHint');
+    if (el) el.innerHTML = progressHtml(lastHangLoad(selectedId), bodyWeight());
   }
 
   // Ostatnia sesja z tym protokołem, w której zapisano obciążenie.
@@ -510,6 +558,7 @@ export function renderTimer(view) {
         notes: [`${config.name}: ${hangsText} po ${config.hang} s`, note].filter(Boolean).join('\n'),
       }));
       toast('Zapisano w dzienniku');
+      prefilledFor = null; // następny trening wypełni się z tej sesji
       run = null;
       renderSetup();
     });

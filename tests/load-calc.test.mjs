@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   loadFromAdded, addedFromPct, hangLoadRecord, fmtAdded, roundTo, currentBodyWeight, strengthSeries, strengthProtocols,
-  initSets, bestSet, sessionHangLoad, fmtSets,
+  initSets, bestSet, sessionHangLoad, fmtSets, progression,
 } from '../app/js/load-calc.js';
 
 const SETTINGS = { weight_trend_method: 'libra', weight_trend_tau_days: 7, weight_daily_mode: 'first' };
@@ -95,4 +95,24 @@ test('serie: tekst do dziennika', () => {
   assert.equal(fmtSets(same), '6/6 · 5/6 (+8 kg)');
   const mixed = [{ reps_done: 1, reps_planned: 1, added_kg: 10 }, { reps_done: 0, reps_planned: 1, added_kg: 12.5 }];
   assert.equal(fmtSets(mixed), '1/1 +10 kg · 0/1 +12,5 kg');
+});
+
+test('progresja: wszystkie powtórzenia → +0,5 kg, ≥ 75% → bez zmian, mniej → −0,5 kg', () => {
+  const sess = (sets) => ({ date: '2026-11-10', hang_load: { added_kg: 8 }, hang_sets: sets.map(([d, p, a = 8]) => ({ reps_done: d, reps_planned: p, added_kg: a })) });
+  assert.deepEqual(
+    [progression(sess([[6, 6], [6, 6]])).verdict, progression(sess([[6, 6], [6, 6]])).suggest_kg],
+    ['up', 8.5]);
+  assert.equal(progression(sess([[6, 6], [5, 6]])).verdict, 'hold');          // 11/12
+  assert.equal(progression(sess([[6, 6], [5, 6]])).suggest_kg, 8);
+  assert.equal(progression(sess([[4, 6], [3, 6]])).verdict, 'down');          // 7/12
+  assert.equal(progression(sess([[4, 6], [3, 6]])).suggest_kg, 7.5);
+  // nieudana cięższa próba (+10, 0/6) nie psuje oceny serii bazowych
+  assert.equal(progression(sess([[6, 6], [6, 6], [0, 6, 10]])).verdict, 'up');
+  assert.equal(progression(sess([[6, 6], [6, 6], [0, 6, 10]])).done, 12);
+  assert.equal(progression(sess([[6, 6], [6, 6], [0, 6, 10]])).base_planned, 12);
+  // stara sesja bez serii: tylko wypełnienie, bez podpowiedzi
+  const old = progression({ hang_load: { added_kg: 5 } });
+  assert.deepEqual([old.base_kg, old.verdict, old.suggest_kg], [5, null, 5]);
+  assert.equal(progression(null), null);
+  assert.equal(progression({ hang_load: null }), null);
 });

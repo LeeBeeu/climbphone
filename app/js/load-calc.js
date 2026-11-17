@@ -130,3 +130,31 @@ export function fmtSets(sets) {
     ? `${sets.map(reps).join(' · ')} (${fmtAdded(sets[0].added_kg)})`
     : sets.map((s) => `${reps(s)} ${fmtAdded(s.added_kg)}`).join(' · ');
 }
+
+// ---------- Wstępne wypełnienie i progresja z poprzedniej sesji ----------
+export const PROGRESS_STEP_KG = 0.5;
+export const HOLD_RATIO = 0.75; // ≥ 75% powtórzeń: zostajemy przy obciążeniu; mniej: lżej
+
+// Na podstawie ostatniej sesji z protokołem:
+//   base_kg  – dociążenie najcięższej ukończonej serii (start następnego treningu),
+//   verdict  – 'up' (wszystkie powtórzenia), 'hold' (≥ 75%), 'down' (< 75%), null (brak serii),
+//   suggest_kg – podpowiedź na dziś.
+export function progression(session, step = PROGRESS_STEP_KG) {
+  const l = session?.hang_load;
+  if (!l) return null;
+  const base = Number(l.added_kg) || 0;
+  const sets = session.hang_sets || [];
+  const planned = sets.reduce((t, s) => t + s.reps_planned, 0);
+  const done = sets.reduce((t, s) => t + (s.reps_done || 0), 0);
+  // Ocena tylko serii z obciążeniem bazowym: cięższa nieudana próba nie obniża podpowiedzi.
+  const atBase = sets.filter((s) => s.added_kg === base);
+  const pBase = atBase.reduce((t, s) => t + s.reps_planned, 0);
+  const dBase = atBase.reduce((t, s) => t + (s.reps_done || 0), 0);
+  let verdict = null;
+  if (pBase > 0) verdict = dBase >= pBase ? 'up' : dBase / pBase >= HOLD_RATIO ? 'hold' : 'down';
+  const delta = { up: step, hold: 0, down: -step }[verdict] ?? 0;
+  return {
+    base_kg: base, verdict, suggest_kg: roundTo(base + delta, step),
+    done, planned, base_done: dBase, base_planned: pBase, date: session.date,
+  };
+}
