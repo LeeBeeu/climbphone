@@ -1,0 +1,80 @@
+// Ćwiczenia poza timerem (podciąganie z obciążeniem, dipy, martwy ciąg…). Czyste funkcje, bez DOM
+// (testy: tests/exercises.test.mjs).
+//
+// Ćwiczenie w sesji dziennika: { name, bodyweight, sets: [{ reps, added_kg }] }
+//   bodyweight = true  → added_kg to dociążenie do masy ciała (ujemne = guma / odciążenie), liczymy % MC
+//   bodyweight = false → added_kg to ciężar sztangi / hantli w kg
+// Sesja z ćwiczeniem z masą ciała zapisuje body_weight_kg = trend wagi z dnia treningu (MC-50).
+import { exKey, bestExSet, fmtAdded } from './load-calc.js';
+
+export { exKey, bestExSet };
+
+export const EXERCISES = [
+  { name: 'Podciąganie', bodyweight: true },
+  { name: 'Podciąganie na jednej ręce', bodyweight: true },
+  { name: 'Dipy', bodyweight: true },
+  { name: 'Pompki', bodyweight: true },
+  { name: 'Martwy ciąg', bodyweight: false },
+  { name: 'Przysiad', bodyweight: false },
+  { name: 'Wyciskanie nad głowę', bodyweight: false },
+];
+
+const kgText = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
+
+// Katalog: wbudowane + własne nazwy z dziennika (bez duplikatów, bez względu na wielkość liter).
+export function exerciseCatalog(sessions) {
+  const map = new Map(EXERCISES.map((e) => [exKey(e.name), { ...e }]));
+  const sorted = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
+  for (const s of sorted) {
+    for (const ex of s.exercises || []) {
+      const k = exKey(ex.name);
+      if (!map.has(k)) map.set(k, { name: ex.name, bodyweight: !!ex.bodyweight });
+    }
+  }
+  return [...map.values()];
+}
+
+// Ostatnie wykonanie ćwiczenia (opcjonalnie z pominięciem edytowanej sesji): { date, exercise } albo null.
+export function lastExercise(sessions, name, skipId = null) {
+  const k = exKey(name);
+  let found = null;
+  for (const s of sessions) {
+    if (s.id === skipId) continue;
+    const ex = (s.exercises || []).find((e) => exKey(e.name) === k && e.sets?.length);
+    if (!ex) continue;
+    if (!found || s.date > found.date || (s.date === found.date && (s.created || 0) > (found.created || 0))) {
+      found = { date: s.date, created: s.created, exercise: ex };
+    }
+  }
+  return found;
+}
+
+// Liczby z formularza: serie z co najmniej 1 powtórzeniem; ćwiczenia bez serii odpadają.
+export function cleanExercises(list) {
+  return (list || [])
+    .map((ex) => ({
+      name: String(ex.name).trim(),
+      bodyweight: !!ex.bodyweight,
+      sets: (ex.sets || [])
+        .map((s) => ({ reps: Math.round(Number(s.reps)), added_kg: Math.round((Number(s.added_kg) || 0) * 10) / 10 }))
+        .filter((s) => Number.isFinite(s.reps) && s.reps > 0),
+    }))
+    .filter((ex) => ex.name && ex.sets.length);
+}
+
+// % masy ciała dla serii ćwiczenia z masą ciała.
+export function exPct(bodyKg, addedKg) {
+  return bodyKg > 0 ? Math.round(((bodyKg + (Number(addedKg) || 0)) / bodyKg) * 100) : null;
+}
+
+// „2×5 +20 kg, 1×4 +20 kg” (sąsiednie identyczne serie łączone), dla ciężaru: „3×5 100 kg”.
+export function fmtExSets(ex) {
+  const groups = [];
+  for (const s of ex.sets || []) {
+    const g = groups.at(-1);
+    if (g && g.reps === s.reps && g.added_kg === s.added_kg) g.n++;
+    else groups.push({ n: 1, reps: s.reps, added_kg: s.added_kg });
+  }
+  const kg = (a) => (ex.bodyweight ? (a ? ` ${fmtAdded(a)}` : '') : ` ${kgText(a)} kg`);
+  return groups.map((g) => `${g.n}×${g.reps}${kg(g.added_kg)}`).join(', ');
+}

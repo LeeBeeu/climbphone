@@ -59,39 +59,66 @@ export function fmtAdded(addedKg) {
 
 // ---------- Siła względna w czasie (MC-52) ----------
 
-// Protokoły z zapisanym obciążeniem, od ostatnio używanego: [{ id, name, count, last }]
+// Klucz ćwiczenia poza timerem (protokoły timera mają klucz = preset_id).
+export const exKey = (name) => `ex:${String(name).trim().toLowerCase()}`;
+
+// Najcięższa seria ćwiczenia z co najmniej jednym powtórzeniem (przy remisie – więcej powtórzeń).
+export function bestExSet(sets) {
+  return (sets || [])
+    .filter((s) => s.reps > 0)
+    .reduce((b, s) => (!b || s.added_kg > b.added_kg || (s.added_kg === b.added_kg && s.reps > b.reps) ? s : b), null);
+}
+
+// Wpisy siły względnej z sesji: zwisy z timera i ćwiczenia z masą ciała (np. podciąganie z dociążeniem).
+function strengthEntries(sessions) {
+  const out = [];
+  for (const s of sessions) {
+    if (s.hang_load && s.preset_id) {
+      out.push({ key: s.preset_id, name: s.preset_name || null, date: s.date,
+        added_kg: s.hang_load.added_kg, body_weight_kg: s.hang_load.body_weight_kg, reps: null });
+    }
+    for (const ex of s.exercises || []) {
+      const best = ex.bodyweight ? bestExSet(ex.sets) : null;
+      if (!best) continue;
+      out.push({ key: exKey(ex.name), name: ex.name, date: s.date,
+        added_kg: best.added_kg, body_weight_kg: s.body_weight_kg ?? null, reps: best.reps });
+    }
+  }
+  return out;
+}
+
+// Protokoły i ćwiczenia z zapisanym obciążeniem, od ostatnio używanego: [{ id, name, count, last }]
 export function strengthProtocols(sessions) {
   const map = new Map();
-  for (const s of sessions) {
-    if (!s.hang_load || !s.preset_id) continue;
-    const p = map.get(s.preset_id) || { id: s.preset_id, name: s.preset_name || 'Protokół', count: 0, last: '' };
+  for (const e of strengthEntries(sessions)) {
+    const p = map.get(e.key) || { id: e.key, name: e.name || 'Protokół', count: 0, last: '' };
     p.count++;
-    if (s.date >= p.last) { p.last = s.date; if (s.preset_name) p.name = s.preset_name; }
-    map.set(s.preset_id, p);
+    if (e.date >= p.last) { p.last = e.date; if (e.name) p.name = e.name; }
+    map.set(e.key, p);
   }
   return [...map.values()].sort((a, b) => b.last.localeCompare(a.last));
 }
 
-// Seria siły względnej dla protokołu: jeden punkt na dzień (najwyższy % MC tego dnia).
+// Seria siły względnej dla protokołu albo ćwiczenia: jeden punkt na dzień (najwyższy % MC tego dnia).
 // Masa ciała z sesji; gdy jej brak (trening bez pomiarów), bierzemy trend wagi z dnia treningu.
-export function strengthSeries(sessions, presetId, weightSeries = []) {
+export function strengthSeries(sessions, key, weightSeries = []) {
   const byDay = new Map();
-  for (const s of sessions) {
-    const l = s.hang_load;
-    if (!l || s.preset_id !== presetId) continue;
-    const bw = l.body_weight_kg ?? trendAt(weightSeries, s.date)?.trend ?? null;
+  for (const e of strengthEntries(sessions)) {
+    if (e.key !== key) continue;
+    const bw = e.body_weight_kg ?? trendAt(weightSeries, e.date)?.trend ?? null;
     if (!(bw > 0)) continue;
-    const added = Number(l.added_kg) || 0;
+    const added = Number(e.added_kg) || 0;
     const point = {
-      date: s.date,
-      day: dayNumber(s.date),
+      date: e.date,
+      day: dayNumber(e.date),
       pct_bw: Math.round(((bw + added) / bw) * 1000) / 10,
       added_kg: added,
       body_weight_kg: round1(bw),
       total_kg: round1(bw + added),
+      reps: e.reps,
     };
-    const prev = byDay.get(s.date);
-    if (!prev || point.pct_bw > prev.pct_bw) byDay.set(s.date, point);
+    const prev = byDay.get(e.date);
+    if (!prev || point.pct_bw > prev.pct_bw) byDay.set(e.date, point);
   }
   return [...byDay.values()].sort((a, b) => a.day - b.day);
 }

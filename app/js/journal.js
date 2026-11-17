@@ -1,12 +1,36 @@
 import { getState, update, uid } from './store.js';
 import { esc, toast, today, fmtDate, monthLabel, fmtMinutes, startOfWeek, parseDate } from './ui.js';
 import { fmtAdded, fmtSets } from './load-calc.js';
+import { buildSeries, trendAt } from './weight-calc.js';
+import {
+  exerciseCatalog, lastExercise, cleanExercises, exPct, fmtExSets, bestExSet, exKey,
+} from './exercises.js';
 
 // Obciążenie zapisane z timera: „+5 kg · 106% MC (MC 80,8 kg)”.
 function hangLoadHtml(l) {
   if (!l) return '';
   const pct = l.pct_bw ? ` · <strong>${l.pct_bw}% MC</strong> <small>(MC ${String(l.body_weight_kg).replace('.', ',')} kg)</small>` : '';
   return `<div class="item-sub">🏋️ ${fmtAdded(l.added_kg)}${pct}</div>`;
+}
+
+// Ćwiczenia poza timerem: „💪 Podciąganie: 2×5 +20 kg, 1×4 +20 kg · 125% MC”.
+function exercisesHtml(s) {
+  return (s.exercises || []).map((ex) => {
+    const best = ex.bodyweight ? bestExSet(ex.sets) : null;
+    const pct = best && s.body_weight_kg ? ` · <strong>${exPct(s.body_weight_kg, best.added_kg)}% MC</strong>` : '';
+    return `<div class="item-sub">💪 ${esc(ex.name)}: ${esc(fmtExSets(ex))}${pct}</div>`;
+  }).join('');
+}
+
+const kgText = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
+
+// Masa ciała w dniu treningu (MC-50): trend z zakładki Waga, a bez pomiarów – masa wpisana w timerze.
+function bodyWeightAt(date) {
+  const st = getState();
+  const t = trendAt(buildSeries(st.weightEntries, st.settings), date);
+  if (t) return Math.round(t.trend * 10) / 10;
+  const manual = Number(st.settings.hang_body_weight_kg);
+  return manual > 0 ? manual : null;
 }
 
 export const SESSION_TYPES = [
@@ -23,12 +47,14 @@ export const SESSION_TYPES = [
 
 let formOpen = false;
 let editingId = null;
+let draftEx = []; // ćwiczenia w otwartym formularzu: [{ name, bodyweight, sets: [{ reps, added_kg }] }]
 
 const byNewest = (a, b) => b.date.localeCompare(a.date) || (b.created || 0) - (a.created || 0);
 const sumMinutes = (list) => list.reduce((t, s) => t + (Number(s.duration) || 0), 0);
 
 function formHtml(s) {
   const types = SESSION_TYPES.includes(s.type) ? SESSION_TYPES : [...SESSION_TYPES, s.type];
+  const catalog = exerciseCatalog(getState().sessions);
   return `
     <form class="card" id="form">
       <h2>${editingId ? 'Edytuj trening' : 'Nowy trening'}</h2>
@@ -50,6 +76,15 @@ function formHtml(s) {
           </select>
         </label>
       </div>
+      <h3 class="sub-title">Ćwiczenia <small class="muted">(serie: powtórzenia × kg)</small></h3>
+      <div id="exList"></div>
+      <label class="field"><span class="sr-only">Dodaj ćwiczenie</span>
+        <select id="exPick">
+          <option value="">+ Dodaj ćwiczenie…</option>
+          ${catalog.map((e) => `<option value="${esc(e.name)}">${esc(e.name)}${e.bodyweight ? '' : ' (ciężar)'}</option>`).join('')}
+          <option value="__new">Inne ćwiczenie…</option>
+        </select>
+      </label>
       <label class="field"><span>Notatki</span>
         <textarea name="notes" rows="3" placeholder="Co było w planie, samopoczucie, kontuzje…">${esc(s.notes)}</textarea>
       </label>
@@ -58,6 +93,35 @@ function formHtml(s) {
         <button class="btn primary">Zapisz</button>
       </div>
     </form>`;
+}
+
+// Lista ćwiczeń w formularzu; rysowana osobno, żeby nie gubić wpisanych pól formularza.
+function exListHtml(date) {
+  if (!draftEx.length) return '';
+  const bw = bodyWeightAt(date);
+  const sessions = getState().sessions;
+  return draftEx.map((ex, i) => {
+    const last = lastExercise(sessions, ex.name, editingId);
+    const unit = ex.bodyweight ? 'dociążenie kg' : 'ciężar kg';
+    return `
+      <div class="ex-card" data-i="${i}">
+        <div class="card-head"><strong>${esc(ex.name)}</strong>
+          <button type="button" class="icon" data-a="delEx" aria-label="Usuń ćwiczenie">🗑️</button></div>
+        ${last ? `<p class="muted">Ostatnio (${fmtDate(last.date)}): ${esc(fmtExSets(last.exercise))}</p>` : ''}
+        <div class="ex-row ex-head"><span>Seria</span><span>Powt.</span><span>${unit}</span><span>${ex.bodyweight ? '% MC' : ''}</span><span></span></div>
+        ${ex.sets.map((s, j) => `
+          <div class="ex-row" data-j="${j}">
+            <span>${j + 1}</span>
+            <input type="number" inputmode="numeric" min="0" max="999" value="${s.reps ?? ''}" data-f="reps" aria-label="Powtórzenia w serii ${j + 1}">
+            <input type="number" inputmode="decimal" step="0.5" min="-200" max="500" value="${s.added_kg ?? 0}" data-f="added_kg" aria-label="Kilogramy w serii ${j + 1}">
+            <span class="muted" data-pct>${ex.bodyweight && bw ? `${exPct(bw, s.added_kg)}%` : ''}</span>
+            <button type="button" class="icon" data-a="delSet" aria-label="Usuń serię ${j + 1}">✕</button>
+          </div>`).join('')}
+        <button type="button" class="btn ghost small" data-a="addSet">+ Seria</button>
+        ${ex.bodyweight && !bw ? '<p class="muted">Brak masy ciała z tego dnia – % MC pojawi się po dodaniu pomiaru w zakładce Waga.</p>' : ''}
+        ${ex.bodyweight && bw ? `<p class="muted">Masa ciała ${kgText(bw)} kg (trend z dnia treningu). Ujemne kg = odciążenie gumą.</p>` : ''}
+      </div>`;
+  }).join('');
 }
 
 function listHtml(sessions) {
@@ -80,6 +144,7 @@ function listHtml(sessions) {
           <div class="item-sub">${fmtDate(s.date)} · ${fmtMinutes(Number(s.duration) || 0)}${s.rpe ? ` · RPE ${s.rpe}` : ''}</div>
           ${hangLoadHtml(s.hang_load)}
           ${s.hang_sets?.length ? `<div class="item-sub">Serie: ${esc(fmtSets(s.hang_sets))}</div>` : ''}
+          ${exercisesHtml(s)}
           ${s.notes ? `<div class="item-notes">${esc(s.notes)}</div>` : ''}
         </div>
         <div class="item-actions">
@@ -109,21 +174,23 @@ export function renderJournal(view) {
       ${formOpen ? formHtml(draft) : '<button class="btn primary big" id="add">+ Nowy trening</button>'}
       ${listHtml([...sessions].sort(byNewest))}`;
 
-    view.querySelector('#add')?.addEventListener('click', () => {
-      formOpen = true;
-      editingId = null;
-      render();
-    });
+    view.querySelector('#add')?.addEventListener('click', () => openForm(null));
     view.querySelector('#cancel')?.addEventListener('click', closeForm);
+    if (formOpen) bindExercises();
     view.querySelector('#form')?.addEventListener('submit', (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
+      const exercises = cleanExercises(draftEx);
+      const date = f.get('date');
       const data = {
-        date: f.get('date'),
+        date,
         type: f.get('type'),
         duration: Number(f.get('duration')),
         rpe: f.get('rpe') ? Number(f.get('rpe')) : null,
         notes: f.get('notes').trim(),
+        exercises,
+        // Masa ciała „zamrożona” w dniu treningu, żeby % MC w historii się nie zmieniał.
+        body_weight_kg: exercises.some((x) => x.bodyweight) ? bodyWeightAt(date) : null,
       };
       update((s) => {
         const existing = s.sessions.find((x) => x.id === editingId);
@@ -135,9 +202,7 @@ export function renderJournal(view) {
     });
 
     view.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => {
-      formOpen = true;
-      editingId = b.dataset.edit;
-      render();
+      openForm(b.dataset.edit);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }));
     view.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
@@ -147,9 +212,72 @@ export function renderJournal(view) {
     }));
   }
 
+  function bindExercises() {
+    const list = view.querySelector('#exList');
+    const dateInput = view.querySelector('#form [name="date"]');
+    const draw = () => { list.innerHTML = exListHtml(dateInput.value || today()); };
+    draw();
+    dateInput.addEventListener('change', draw);
+
+    view.querySelector('#exPick').addEventListener('change', (e) => {
+      let name = e.target.value;
+      e.target.value = '';
+      if (!name) return;
+      let bodyweight;
+      if (name === '__new') {
+        name = prompt('Nazwa ćwiczenia:')?.trim();
+        if (!name) return;
+        bodyweight = confirm('Ćwiczenie z masą ciała (kg to dociążenie, liczymy % masy ciała)?\nAnuluj = ćwiczenie z ciężarem (kg to ciężar sztangi/hantli).');
+      } else {
+        bodyweight = exerciseCatalog(getState().sessions).find((x) => exKey(x.name) === exKey(name))?.bodyweight ?? true;
+      }
+      if (draftEx.some((x) => exKey(x.name) === exKey(name))) return toast('To ćwiczenie jest już na liście');
+      // Wstępne wypełnienie seriami z ostatniego wykonania tego ćwiczenia.
+      const last = lastExercise(getState().sessions, name, editingId);
+      const sets = last ? last.exercise.sets.map((s) => ({ ...s })) : [{ reps: 5, added_kg: 0 }];
+      draftEx.push({ name, bodyweight: last ? !!last.exercise.bodyweight : bodyweight, sets });
+      draw();
+    });
+
+    list.addEventListener('input', (e) => {
+      const f = e.target.dataset.f;
+      const card = e.target.closest('[data-i]');
+      const row = e.target.closest('[data-j]');
+      if (!f || !card || !row) return;
+      const ex = draftEx[card.dataset.i];
+      const set = ex.sets[row.dataset.j];
+      const v = parseFloat(String(e.target.value).replace(',', '.'));
+      set[f] = Number.isFinite(v) ? v : (f === 'reps' ? null : 0);
+      if (f === 'added_kg' && ex.bodyweight) {
+        const bw = bodyWeightAt(dateInput.value || today());
+        row.querySelector('[data-pct]').textContent = bw ? `${exPct(bw, set.added_kg)}%` : '';
+      }
+    });
+
+    list.addEventListener('click', (e) => {
+      const a = e.target.closest('[data-a]')?.dataset.a;
+      const card = e.target.closest('[data-i]');
+      if (!a || !card) return;
+      const ex = draftEx[card.dataset.i];
+      if (a === 'delEx') draftEx.splice(card.dataset.i, 1);
+      if (a === 'addSet') ex.sets.push({ ...(ex.sets.at(-1) || { reps: 5, added_kg: 0 }) }); // kopia ostatniej serii
+      if (a === 'delSet') ex.sets.splice(e.target.closest('[data-j]').dataset.j, 1);
+      draw();
+    });
+  }
+
+  function openForm(id) {
+    formOpen = true;
+    editingId = id;
+    const s = id ? getState().sessions.find((x) => x.id === id) : null;
+    draftEx = structuredClone(s?.exercises || []);
+    render();
+  }
+
   function closeForm() {
     formOpen = false;
     editingId = null;
+    draftEx = [];
     render();
   }
 

@@ -328,10 +328,10 @@ function drawStrength(el, m) {
     svg += `<polyline class="ch-strength" points="${linePts.map((p) => `${X(p.day)},${Y(p.pct_bw)}`).join(' ')}"/>`;
   }
   svg += inside.map((p) => `<circle class="ch-sdot" cx="${X(p.day)}" cy="${Y(p.pct_bw)}" r="3.5">
-    <title>${fmtDay(p.date)}: ${String(p.pct_bw).replace('.', ',')}% MC · ${fmtAdded(p.added_kg)} przy ${kg(p.body_weight_kg)} kg</title></circle>`).join('');
+    <title>${fmtDay(p.date)}: ${Math.round(p.pct_bw)}% MC · ${fmtAdded(p.added_kg)} przy ${kg(p.body_weight_kg)} kg${p.reps ? ` · ${p.reps} powt.` : ''}</title></circle>`).join('');
   svg += '</g>';
   if (!inside.length) {
-    svg += `<text class="ch-label" x="${(pad.l + width - pad.r) / 2}" y="${height / 2}" text-anchor="middle">Brak treningów z tym protokołem w tym zakresie</text>`;
+    svg += `<text class="ch-label" x="${(pad.l + width - pad.r) / 2}" y="${height / 2}" text-anchor="middle">Brak treningów w tym zakresie</text>`;
   }
   el.innerHTML = `${svg}</svg>`;
 }
@@ -339,14 +339,14 @@ function drawStrength(el, m) {
 function strengthHtml(m) {
   if (!m.protocols.length) {
     return `<h3 class="sub-title">Siła względna</h3>
-      <p class="muted">Zapisz trening z timera z ustawionym obciążeniem, a tutaj zobaczysz obciążenie w % masy ciała obok trendu wagi.</p>`;
+      <p class="muted">Zapisz trening z timera z obciążeniem albo ćwiczenie z masą ciała w dzienniku (np. podciąganie), a tutaj zobaczysz obciążenie w % masy ciała obok trendu wagi.</p>`;
   }
   const last = m.strength.at(-1);
   const best = m.strength.reduce((b, p) => (!b || p.pct_bw > b.pct_bw ? p : b), null);
-  const pct = (v) => `${String(v).replace('.', ',')}%`;
+  const pct = (v) => `${Math.round(v)}%`;
   return `
     <div class="card-head"><h3 class="sub-title">Siła względna <small class="muted">(% masy ciała)</small></h3>
-      <select id="sPreset" aria-label="Protokół">
+      <select id="sPreset" aria-label="Protokół albo ćwiczenie">
         ${m.protocols.map((p) => `<option value="${esc(p.id)}" ${p.id === strengthPreset ? 'selected' : ''}>${esc(p.name)} (${p.count})</option>`).join('')}
       </select>
     </div>
