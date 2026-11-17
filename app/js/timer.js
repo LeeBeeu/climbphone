@@ -1,7 +1,8 @@
 import { getState, update, uid } from './store.js';
 import { esc, toast, today, fmtSeconds, fmtDuration, plural, fmtDate } from './ui.js';
 import {
-  currentBodyWeight, loadFromAdded, addedFromPct, hangLoadRecord, fmtAdded, BW_STALE_DAYS, PCT_MIN, PCT_MAX,
+  currentBodyWeight, loadFromAdded, addedFromPct, fmtAdded, BW_STALE_DAYS, PCT_MIN, PCT_MAX,
+  initSets, sessionHangLoad, fmtSets,
 } from './load-calc.js';
 
 const BUILTIN = [
@@ -276,6 +277,7 @@ export function renderTimer(view) {
       startedAt: Date.now(),
       interval: null,
       done: false,
+      sets: initSets(config.sets, config.reps, runLoad.added ?? 0),
     };
     renderRunner();
     enterPhase();
@@ -298,10 +300,26 @@ export function renderTimer(view) {
         <button class="btn" id="skip">⏭ Pomiń</button>
         <button class="btn danger" id="stop">⏹ Stop</button>
       </div>
+      <section class="card setlog" id="setlog" hidden></section>
       <p class="muted center">${esc(config.name)} · ${config.sets} × ${config.reps} · zwis ${config.hang} s / odpoczynek ${config.rest} s</p>
-      ${runLoad.added !== null ? `<p class="center"><strong>${esc(loadText(runLoad.bw, runLoad.added))}</strong></p>` : ''}`;
+      <p class="center"><strong id="loadline"></strong></p>`;
 
     view.querySelector('#pause').addEventListener('click', togglePause);
+    // Panel serii w przerwie: powtórzenia zakończonej serii i dociążenie kolejnych.
+    view.querySelector('#setlog').addEventListener('click', (e) => {
+      const a = e.target.closest('[data-a]')?.dataset.a;
+      const k = run?.logSet;
+      if (!a || !k) return;
+      const s = run.sets[k - 1];
+      if (a === 'rep-') s.reps_done = Math.max(0, s.reps_done - 1);
+      if (a === 'rep+') s.reps_done = Math.min(s.reps_planned, s.reps_done + 1);
+      if (a === 'kg-' || a === 'kg+') {
+        const next = run.sets[k];
+        const v = Math.max(-100, Math.min(150, next.added_kg + (a === 'kg+' ? 0.5 : -0.5)));
+        run.sets.slice(k).forEach((x) => { x.added_kg = v; }); // dotyczy wszystkich kolejnych serii
+      }
+      showSetLog(k);
+    });
     view.querySelector('#skip').addEventListener('click', () => {
       if (run.paused) togglePause();
       run.end = Date.now();
@@ -317,10 +335,22 @@ export function renderTimer(view) {
     const next = run.phases[run.idx + 1];
     run.lastSec = null;
 
+    // Obciążenie bieżącej serii (w przerwie – następnej).
+    const cur = run.sets[Math.min(config.sets, ph.type === 'setrest' ? ph.set + 1 : ph.set || 1) - 1];
+    view.querySelector('#loadline').textContent = loadText(runLoad.bw, cur.added_kg);
+    if (ph.type === 'setrest') {
+      const s = run.sets[ph.set - 1];
+      if (s.reps_done === null) s.reps_done = s.reps_planned; // timer przeszedł całą serię
+      showSetLog(ph.set);
+    } else {
+      run.logSet = null;
+      view.querySelector('#setlog').hidden = true;
+    }
+
     view.querySelector('#runner').className = `runner ${ph.type}`;
     view.querySelector('#label').textContent = LABELS[ph.type];
     view.querySelector('#meta').textContent =
-      ph.type === 'prep' ? `Złap chwyt${runLoad.added ? ` · ${fmtAdded(runLoad.added)}` : ''}` :
+      ph.type === 'prep' ? `Złap chwyt${cur.added_kg ? ` · ${fmtAdded(cur.added_kg)}` : ''}` :
       ph.type === 'setrest' ? `Seria ${ph.set}/${config.sets} zakończona` :
       `Seria ${ph.set}/${config.sets} · Powtórzenie ${ph.rep}/${config.reps}`;
     view.querySelector('#next').textContent = next
@@ -334,6 +364,24 @@ export function renderTimer(view) {
       audio.beep(523, 0.3);
       vibrate([120, 80, 120]);
     }
+  }
+
+  function showSetLog(k) {
+    const s = run.sets[k - 1];
+    const next = run.sets[k];
+    const el = view.querySelector('#setlog');
+    run.logSet = k;
+    el.hidden = false;
+    el.innerHTML = `
+      <div class="set-row"><span>Seria ${k}: ukończone powtórzenia</span>
+        <button class="btn small" data-a="rep-" aria-label="Mniej powtórzeń">−</button>
+        <b>${s.reps_done}/${s.reps_planned}</b>
+        <button class="btn small" data-a="rep+" aria-label="Więcej powtórzeń">+</button></div>
+      ${next ? `<div class="set-row"><span>Dociążenie w serii ${k + 1}</span>
+        <button class="btn small" data-a="kg-" aria-label="Mniej o 0,5 kg">−</button>
+        <b>${fmtAdded(next.added_kg)}</b>
+        <button class="btn small" data-a="kg+" aria-label="Więcej o 0,5 kg">+</button></div>` : ''}`;
+    if (next) view.querySelector('#loadline').textContent = loadText(runLoad.bw, next.added_kg);
   }
 
   function tick() {
@@ -376,7 +424,12 @@ export function renderTimer(view) {
     clearInterval(run.interval);
     run.done = true;
     unlockScreen();
-    const doneHangs = (completed ? run.phases : run.phases.slice(0, run.idx)).filter((p) => p.type === 'hang').length;
+    const donePhases = (completed ? run.phases : run.phases.slice(0, run.idx)).filter((p) => p.type === 'hang');
+    const doneHangs = donePhases.length;
+    // Serie niezalogowane w przerwie: tyle powtórzeń, ile zwisów timer faktycznie przeszedł.
+    for (const s of run.sets) {
+      if (s.reps_done === null) s.reps_done = donePhases.filter((p) => p.set === s.set).length;
+    }
     const elapsed = Math.round((Date.now() - run.startedAt) / 1000);
     if (completed) {
       audio.beep(880, 0.15);
@@ -393,9 +446,17 @@ export function renderTimer(view) {
       <section class="card center">
         <h2>${completed ? '💪 Trening zakończony!' : 'Trening przerwany'}</h2>
         <p class="muted">${esc(config.name)} · ${hangsText} · ${fmtDuration(elapsed)}</p>
-        <label class="field" style="text-align:left"><span>Dociążenie użyte w treningu (kg) <small>– ujemne = odciążenie</small></span>
-          <input type="number" id="added" inputmode="decimal" step="0.5" min="-100" max="150" value="${runLoad.added ?? 0}">
-        </label>
+        <h3 class="sub-title" style="text-align:left">Serie <small class="muted">(powtórzenia i dociążenie w kg; ujemne = odciążenie)</small></h3>
+        <div class="sets-table">
+          ${run.sets.map((s) => `
+            <div class="set-row" data-set="${s.set}">
+              <span>Seria ${s.set}</span>
+              <button class="btn small" data-a="rep-" aria-label="Mniej powtórzeń">−</button>
+              <b data-reps>${s.reps_done}/${s.reps_planned}</b>
+              <button class="btn small" data-a="rep+" aria-label="Więcej powtórzeń">+</button>
+              <input type="number" inputmode="decimal" step="0.5" min="-100" max="150" value="${s.added_kg}" data-kg aria-label="Dociążenie serii ${s.set} w kg">
+            </div>`).join('')}
+        </div>
         <p class="muted" id="sumload" style="text-align:left"></p>
         <label class="field" style="text-align:left"><span>Notatka (chwyt, samopoczucie)</span>
           <textarea id="note" rows="2" placeholder="np. listwa 20 mm, półzaciąg"></textarea>
@@ -404,24 +465,36 @@ export function renderTimer(view) {
         <button class="btn ghost" id="back">Wróć do timera</button>
       </section>`;
 
-    const readAdded = () => {
-      const v = parseFloat(String(view.querySelector('#added').value).replace(',', '.'));
-      return Number.isFinite(v) ? Math.max(-100, Math.min(150, v)) : 0;
-    };
+    const sets = run.sets;
     const showLoad = () => {
-      view.querySelector('#sumload').textContent = runLoad.bw
-        ? `Obciążenie: ${loadText(runLoad.bw, readAdded())} (masa ciała ${kgText(runLoad.bw.kg)} kg)`
-        : 'Brak masy ciała – zapiszemy samo dociążenie.';
+      const hl = sessionHangLoad(sets, runLoad.bw?.kg);
+      view.querySelector('#sumload').textContent = !hl
+        ? 'Żadna seria nie ma ukończonego powtórzenia – obciążenie nie trafi na wykres siły.'
+        : runLoad.bw
+          ? `Najcięższa ukończona seria: ${loadText(runLoad.bw, hl.added_kg)} (masa ciała ${kgText(runLoad.bw.kg)} kg)`
+          : `Najcięższa ukończona seria: ${fmtAdded(hl.added_kg)} (brak masy ciała – bez % MC)`;
     };
-    view.querySelector('#added').addEventListener('input', showLoad);
+    view.querySelector('.sets-table').addEventListener('click', (e) => {
+      const a = e.target.closest('[data-a]')?.dataset.a;
+      const row = e.target.closest('[data-set]');
+      if (!a || !row) return;
+      const s = sets[row.dataset.set - 1];
+      s.reps_done = Math.max(0, Math.min(s.reps_planned, s.reps_done + (a === 'rep+' ? 1 : -1)));
+      row.querySelector('[data-reps]').textContent = `${s.reps_done}/${s.reps_planned}`;
+      showLoad();
+    });
+    view.querySelector('.sets-table').addEventListener('input', (e) => {
+      const row = e.target.closest('[data-set]');
+      if (!row || !e.target.matches('[data-kg]')) return;
+      const v = parseFloat(String(e.target.value).replace(',', '.'));
+      sets[row.dataset.set - 1].added_kg = Number.isFinite(v) ? Math.max(-100, Math.min(150, v)) : 0;
+      showLoad();
+    });
     showLoad();
 
     view.querySelector('#log').addEventListener('click', () => {
       const note = view.querySelector('#note').value.trim();
-      const added = readAdded();
-      const hangLoad = runLoad.bw
-        ? hangLoadRecord(runLoad.bw.kg, added)
-        : { body_weight_kg: null, added_kg: added, total_kg: null, pct_bw: null };
+      const hangLoad = sessionHangLoad(sets, runLoad.bw?.kg);
       update((s) => s.sessions.push({
         id: uid(),
         created: Date.now(),
@@ -432,7 +505,9 @@ export function renderTimer(view) {
         preset_id: selectedId,
         preset_name: config.name,
         hang_load: hangLoad,
-        notes: [`${config.name}: ${hangsText} po ${config.hang} s, ${loadText(runLoad.bw, added)}`, note].filter(Boolean).join('\n'),
+        hang_sets: sets.map(({ set, reps_planned, reps_done, added_kg }) => ({ set, reps_planned, reps_done, added_kg })),
+        hang_seconds: config.hang,
+        notes: [`${config.name}: ${hangsText} po ${config.hang} s`, note].filter(Boolean).join('\n'),
       }));
       toast('Zapisano w dzienniku');
       run = null;

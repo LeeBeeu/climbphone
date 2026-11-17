@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   loadFromAdded, addedFromPct, hangLoadRecord, fmtAdded, roundTo, currentBodyWeight, strengthSeries, strengthProtocols,
+  initSets, bestSet, sessionHangLoad, fmtSets,
 } from '../app/js/load-calc.js';
 
 const SETTINGS = { weight_trend_method: 'libra', weight_trend_tau_days: 7, weight_daily_mode: 'first' };
@@ -75,4 +76,23 @@ test('siła względna: punkt na dzień, najwyższy % MC, masa z sesji albo z tre
   const protos = strengthProtocols(sessions);
   assert.deepEqual(protos.map((p) => [p.id, p.count]), [['b-repeaters', 1], ['b-max', 3]]);
   assert.equal(protos[1].name, 'Max hangs');
+});
+
+test('serie: najcięższa ukończona seria wyznacza obciążenie sesji', () => {
+  const sets = initSets(3, 6, 8);
+  assert.deepEqual(sets[2], { set: 3, reps_planned: 6, reps_done: null, added_kg: 8 });
+  sets[0].reps_done = 6;
+  sets[1].reps_done = 6; sets[1].added_kg = 10;
+  sets[2].reps_done = 0; sets[2].added_kg = 12;       // nieudana seria się nie liczy
+  assert.equal(bestSet(sets).set, 2);
+  assert.deepEqual(sessionHangLoad(sets, 80), { body_weight_kg: 80, added_kg: 10, total_kg: 90, pct_bw: 113 });
+  assert.equal(sessionHangLoad(sets, null).added_kg, 10);
+  assert.equal(sessionHangLoad(initSets(2, 1, 5), 80), null, 'brak ukończonych serii');
+});
+
+test('serie: tekst do dziennika', () => {
+  const same = [{ reps_done: 6, reps_planned: 6, added_kg: 8 }, { reps_done: 5, reps_planned: 6, added_kg: 8 }];
+  assert.equal(fmtSets(same), '6/6 · 5/6 (+8 kg)');
+  const mixed = [{ reps_done: 1, reps_planned: 1, added_kg: 10 }, { reps_done: 0, reps_planned: 1, added_kg: 12.5 }];
+  assert.equal(fmtSets(mixed), '1/1 +10 kg · 0/1 +12,5 kg');
 });

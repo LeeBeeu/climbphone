@@ -1,6 +1,6 @@
 import { getState, update, uid } from './store.js';
 import { esc, toast, today, fmtDate, monthLabel, fmtMinutes, startOfWeek, parseDate } from './ui.js';
-import { fmtAdded } from './load-calc.js';
+import { fmtAdded, fmtSets } from './load-calc.js';
 
 // Obciążenie zapisane z timera: „+5 kg · 106% MC (MC 80,8 kg)”.
 function hangLoadHtml(l) {
@@ -79,6 +79,7 @@ function listHtml(sessions) {
           <div class="item-title">${esc(s.type)}</div>
           <div class="item-sub">${fmtDate(s.date)} · ${fmtMinutes(Number(s.duration) || 0)}${s.rpe ? ` · RPE ${s.rpe}` : ''}</div>
           ${hangLoadHtml(s.hang_load)}
+          ${s.hang_sets?.length ? `<div class="item-sub">Serie: ${esc(fmtSets(s.hang_sets))}</div>` : ''}
           ${s.notes ? `<div class="item-notes">${esc(s.notes)}</div>` : ''}
         </div>
         <div class="item-actions">

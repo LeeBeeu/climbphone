@@ -95,3 +95,38 @@ export function strengthSeries(sessions, presetId, weightSeries = []) {
   }
   return [...byDay.values()].sort((a, b) => a.day - b.day);
 }
+
+// ---------- Serie (logowanie w timerze) ----------
+// Seria: { set, reps_planned, reps_done, added_kg }
+
+export function initSets(count, reps, addedKg) {
+  return Array.from({ length: count }, (_, i) => ({
+    set: i + 1, reps_planned: reps, reps_done: null, added_kg: Number(addedKg) || 0,
+  }));
+}
+
+// Najcięższa seria z choć jednym ukończonym powtórzeniem (przy remisie – więcej powtórzeń).
+export function bestSet(sets) {
+  return sets
+    .filter((s) => s.reps_done > 0)
+    .reduce((b, s) => (!b || s.added_kg > b.added_kg || (s.added_kg === b.added_kg && s.reps_done > b.reps_done) ? s : b), null);
+}
+
+// Obciążenie sesji do dziennika i wykresu: z najcięższej ukończonej serii.
+export function sessionHangLoad(sets, bodyKg) {
+  const best = bestSet(sets);
+  if (!best) return null;
+  return bodyKg > 0
+    ? hangLoadRecord(bodyKg, best.added_kg)
+    : { body_weight_kg: null, added_kg: round1(best.added_kg), total_kg: null, pct_bw: null };
+}
+
+// „6/6 · 6/6 · 5/6 (+8 kg)” albo, gdy dociążenie się zmieniało: „6/6 +8 kg · 5/6 +10 kg”.
+export function fmtSets(sets) {
+  if (!sets?.length) return '';
+  const same = sets.every((s) => s.added_kg === sets[0].added_kg);
+  const reps = (s) => `${s.reps_done ?? 0}/${s.reps_planned}`;
+  return same
+    ? `${sets.map(reps).join(' · ')} (${fmtAdded(sets[0].added_kg)})`
+    : sets.map((s) => `${reps(s)} ${fmtAdded(s.added_kg)}`).join(' · ');
+}
