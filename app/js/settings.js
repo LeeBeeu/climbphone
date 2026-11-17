@@ -27,10 +27,37 @@ export function renderSettings(view) {
       </section>
 
       <section class="card">
+        <h2>Masa ciała</h2>
+        <label class="field"><span>Metoda trendu</span>
+          <select id="trendMethod">
+            <option value="libra" ${st.settings.weight_trend_method !== 'ema' ? 'selected' : ''}>Jak w Librze (stała czasowa τ)</option>
+            <option value="ema" ${st.settings.weight_trend_method === 'ema' ? 'selected' : ''}>The Hacker's Diet (α na dzień pomiaru)</option>
+          </select>
+        </label>
+        <div class="grid2">
+          <label class="field"><span>Stała czasowa τ (dni)</span>
+            <input type="number" id="tau" min="1" max="60" step="0.5" value="${st.settings.weight_trend_tau_days}">
+          </label>
+          <label class="field"><span>Wygładzanie α</span>
+            <input type="number" id="alpha" min="0.01" max="1" step="0.01" value="${st.settings.weight_trend_alpha}">
+          </label>
+          <label class="field"><span>Wartość dnia</span>
+            <select id="dailyMode">
+              <option value="first" ${st.settings.weight_daily_mode === 'first' ? 'selected' : ''}>pierwszy pomiar</option>
+              <option value="mean" ${st.settings.weight_daily_mode === 'mean' ? 'selected' : ''}>średnia dnia</option>
+            </select>
+          </label>
+        </div>
+        <p class="muted">Domyślnie trend liczony jak w Librze (τ = 7 dni) – zgadza się z trendem z jej eksportu.
+          τ dotyczy metody Libry, α metody Hacker's Diet. Większe τ albo mniejsze α – gładszy, wolniej reagujący trend.
+          „Wartość dnia” to punkt na wykresie (i podstawa trendu w metodzie Hacker's Diet).</p>
+      </section>
+
+      <section class="card">
         <h2>Kopia zapasowa</h2>
         <p class="muted">Dane są zapisane tylko na tym urządzeniu, w pamięci przeglądarki.
           Eksportuj je regularnie. Plik JSON pozwala też przenieść dane między komputerem a telefonem.</p>
-        <p class="muted">Zapisane: ${st.sessions.length} treningów, ${st.ascents.length} przejść, ${st.plans.length} planów.</p>
+        <p class="muted">Zapisane: ${st.weightEntries.length} pomiarów wagi, ${st.sessions.length} treningów, ${st.ascents.length} przejść, ${st.plans.length} planów.</p>
         <div class="row">
           <button class="btn" id="export">⬇️ Eksportuj</button>
           <button class="btn" id="import">⬆️ Importuj</button>
@@ -67,6 +94,27 @@ export function renderSettings(view) {
     });
     view.querySelector('#boulderSystem').addEventListener('change', (e) => {
       update((s) => { s.settings.boulderSystem = e.target.value; });
+      toast('Zapisano');
+    });
+
+    view.querySelector('#alpha').addEventListener('change', (e) => {
+      const a = parseFloat(String(e.target.value).replace(',', '.'));
+      if (!(a > 0 && a <= 1)) return toast('α musi być z zakresu 0,01–1');
+      update((s) => { s.settings.weight_trend_alpha = a; });
+      toast('Zapisano');
+    });
+    view.querySelector('#trendMethod').addEventListener('change', (e) => {
+      update((s) => { s.settings.weight_trend_method = e.target.value; });
+      toast('Zapisano');
+    });
+    view.querySelector('#tau').addEventListener('change', (e) => {
+      const tau = parseFloat(String(e.target.value).replace(',', '.'));
+      if (!(tau >= 1 && tau <= 60)) return toast('τ musi być z zakresu 1–60 dni');
+      update((s) => { s.settings.weight_trend_tau_days = tau; });
+      toast('Zapisano');
+    });
+    view.querySelector('#dailyMode').addEventListener('change', (e) => {
+      update((s) => { s.settings.weight_daily_mode = e.target.value; });
       toast('Zapisano');
     });
 

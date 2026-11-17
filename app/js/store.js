@@ -12,7 +12,17 @@ const defaults = () => ({
   plans: [],         // plany treningowe
   planChecks: {},    // odhaczone ćwiczenia: { "planId|2026-W45": { "0:Ćwiczenie": true } }
   timerPresets: [],  // własne protokoły timera
-  settings: { routeSystem: 'french', boulderSystem: 'font' },
+  // Moduł masy ciała – nazwy pól jak w docs/specyfikacja.md, żeby dało się je przenieść 1:1 do bazy.
+  weightEntries: [], // weight_entries: pomiary
+  weightGoals: [],   // weight_goal: aktywny cel = ostatni bez ended_at, wcześniejsze to historia
+  settings: {
+    routeSystem: 'french',
+    boulderSystem: 'font',
+    weight_trend_method: 'libra', // 'libra' (czas, τ dni) albo 'ema' (Hacker's Diet, α na dzień pomiaru)
+    weight_trend_tau_days: 7,
+    weight_trend_alpha: 0.1,
+    weight_daily_mode: 'first',
+  },
 });
 
 // v1 -> v2: "Miejsce" staje się rejonem, style SEND/PR zamieniają się na RP/GO jak w 8a.nu.

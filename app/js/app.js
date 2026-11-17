@@ -1,3 +1,4 @@
+import { renderWeight } from './weight.js';
 import { renderTimer } from './timer.js';
 import { renderJournal } from './journal.js';
 import { renderAscents } from './ascents.js';
@@ -6,6 +7,7 @@ import { renderSettings } from './settings.js';
 import { pwa } from './ui.js';
 
 const routes = {
+  waga: { title: 'Masa ciała', render: renderWeight },
   timer: { title: 'Timer chwytotablicy', render: renderTimer },
   dziennik: { title: 'Dziennik treningów', render: renderJournal },
   przejscia: { title: 'Przejścia', render: renderAscents, wide: true },
@@ -18,7 +20,7 @@ let cleanup = null;
 
 function navigate() {
   const name = location.hash.replace(/^#\/?/, '');
-  const key = routes[name] ? name : 'timer';
+  const key = routes[name] ? name : 'waga';
   const route = routes[key];
 
   cleanup?.();

@@ -1,4 +1,4 @@
-// Prosty serwer do podglądu aplikacji (bez zależności). Uruchom: node server.js
+// Prosty serwer do podglądu aplikacji (bez zależności). Uruchom: npm start
 const http = require('http');
 const fs = require('fs');
 const path = require('path');

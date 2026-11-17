@@ -3,7 +3,7 @@
   "short_name": "ClimbPhone",
   "description": "Timer chwytotablicy, dziennik treningów, log przejść i plany treningowe.",
   "lang": "pl",
-  "start_url": "./#/timer",
+  "start_url": "./#/waga",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

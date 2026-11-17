@@ -1,6 +1,6 @@
 // Service worker: aplikacja działa offline. Strategia "najpierw sieć",
 // więc po zmianie kodu wystarczy odświeżyć stronę, a cache to tylko zapas.
-const CACHE = 'climbphone-v2';
+const CACHE = 'climbphone-v3';
 const ASSETS = [
   './',
   'index.html',
@@ -11,6 +11,9 @@ const ASSETS = [
   'js/ui.js',
   'js/grades.js',
   'js/timer.js',
+  'js/weight.js',
+  'js/weight-calc.js',
+  'js/weight-csv.js',
   'js/journal.js',
   'js/ascents.js',
   'js/import8a.js',

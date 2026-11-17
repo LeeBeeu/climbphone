@@ -14,6 +14,14 @@ npm start
 
 Otwórz http://localhost:5173 w przeglądarce.
 
+Testy obliczeń (trend, tempo, prognoza, CSV):
+
+```bash
+npm test
+```
+
+Specyfikacja funkcjonalna i plan etapów: [docs/specyfikacja.md](docs/specyfikacja.md).
+
 ## Struktura
 
 ```
@@ -23,6 +31,9 @@ app/                  ← cała aplikacja (to wgrywasz na hosting)
   sw.js                 ← service worker (praca offline)
   css/styles.css
   js/app.js             ← nawigacja między zakładkami
+  js/weight.js          ← ekran Waga (wpis, trend, cel, wykres, lista, CSV)
+  js/weight-calc.js     ← obliczenia wagi: trend, tempo, prognoza, zastój
+  js/weight-csv.js      ← import CSV z Libry i eksport CSV
   js/store.js           ← zapis danych w localStorage
   js/timer.js           ← timer chwytotablicy
   js/journal.js         ← dziennik treningów
@@ -31,7 +42,9 @@ app/                  ← cała aplikacja (to wgrywasz na hosting)
   js/import8a.js        ← import przejść z 8a.nu
   js/plans.js           ← plany treningowe
   js/settings.js        ← ustawienia, eksport/import
-server.js             ← lokalny serwer do podglądu
+server.cjs            ← lokalny serwer do podglądu
+docs/specyfikacja.md  ← specyfikacja funkcjonalna i etapy
+tests/                ← testy obliczeń (npm test)
 data/8a-ascents.json  ← Twoje przejścia pobrane z 8a.nu (nie trafia na hosting)
 tools/8a-export.js    ← skrypt do pobrania aktualnych przejść z 8a.nu
 ```
