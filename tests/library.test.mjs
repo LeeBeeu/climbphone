@@ -47,10 +47,10 @@ test('wyszukiwanie bez polskich znaków i filtry', () => {
 
 test('przeliczenia: wpis do planu, protokół timera, ćwiczenie do dziennika', () => {
   const max = byId('maxhang_half');
-  assert.equal(planItemText(max), 'Timer: Max zwisy – półzaciąg 10 s – 5–6 zwisów 10 s, 3 min przerwy');
+  assert.equal(planItemText(max), 'Timer: Max zwisy – półzaciąg 10 s – 5–6 zwisów 10 s, 3 min przerwy, listwa 20 mm');
   assert.deepEqual(timerPresetFrom(max), {
     id: 'lib-maxhang_half', name: 'Max zwisy – półzaciąg 10 s', prep: 10, hang: 10, rest: 0, reps: 1, sets: 6, setRest: 180,
-    load_mode: 'kg', added_kg: 0, load_pct: 100,
+    load_mode: 'kg', added_kg: 0, load_pct: 100, edge_mm: 20,
   });
   assert.equal(timerPresetFrom(byId('arc')), null);
   const ex = journalExerciseFrom(byId('weighted_pullups'));
@@ -104,4 +104,22 @@ test('treningi: gotowe zestawy, plan, dziennik, usuwanie ćwiczenia', async () =
   assert.deepEqual(j.exercises.map((e) => e.name), ['Podciąganie']);
   assert.equal(j.notes, 'Trening: Moja sesja\n• ARC – ciągłe wspinanie – 2–3 × 20–30 min');
   assert.deepEqual(removeFromWorkouts([own], 'pullups')[0].items, ['own-x', 'arc']);
+});
+
+test('jednostronne, piramidy i szerokość listwy', async () => {
+  const { parseScheme, validateExercise } = await import('../app/js/library-calc.js');
+  const pyr = journalExerciseFrom(byId('pullup_pyramid'));
+  assert.deepEqual(pyr.sets.map((s) => s.reps), [1, 2, 3, 4, 3, 2, 1]);
+  assert.equal(planItemText(byId('maxhang_half')), 'Timer: Max zwisy – półzaciąg 10 s – 5–6 zwisów 10 s, 3 min przerwy, listwa 20 mm');
+  assert.equal(timerPresetFrom(byId('maxhang_half')).edge_mm, 20);
+  assert.equal(planItemText(byId('pistol')), 'Przysiad na jednej nodze – 3 × 5 na nogę', 'dawka mówi już o stronie');
+  assert.equal(planItemText(byId('external_rotation')), 'Rotacja zewnętrzna z gumą – 3 × 15 (na stronę)');
+  assert.deepEqual(parseScheme('5, 4,3 2'), [5, 4, 3, 2]);
+  assert.deepEqual(parseScheme('1-2-3'), [1, 2, 3]);
+  assert.equal(parseScheme(''), null);
+  const base = { id: 'own-9', name: 'Test', cat: 'strength', level: 1, equip: ['bar'], kind: 'sets', dose: 'x', how: 'y',
+    sets: { sets: 3, reps: 5, bodyweight: true } };
+  assert.equal(validateExercise({ ...base, sets: { ...base.sets, scheme: [5, 4, 3] } }), null);
+  assert.match(validateExercise({ ...base, sets: { ...base.sets, scheme: [5, 0] } }), /Powtórzenia w seriach/);
+  assert.match(validateExercise({ ...base, edge_mm: 2 }), /listwy/);
 });

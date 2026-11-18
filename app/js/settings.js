@@ -1,9 +1,47 @@
 import { getState, update, replaceState } from './store.js';
-import { esc, toast, today, pwa } from './ui.js';
+import { esc, toast, today, pwa, fmtDate } from './ui.js';
 import { systemsFor } from './grades.js';
 import { parse8a, merge8a } from './import8a.js';
 import { exportBackup } from './backup.js';
 import { backupStatus, sinceText, REMINDER_OPTIONS } from './backup-calc.js';
+import { bestGrade, gradeMilestones, systemLabel, bmi } from './profile-calc.js';
+import { currentBodyWeight } from './load-calc.js';
+
+// Profil: wzrost, masa (trend), BMI, najlepsze wyceny z logbooka i historia rekordów.
+function profileHtml(st) {
+  const bw = currentBodyWeight(st.weightEntries, st.settings);
+  const h = st.settings.height_cm;
+  const b = bw ? bmi(bw.kg, h) : null;
+  const since = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+  const cell = (kind, group) => {
+    const all = bestGrade(st.ascents, kind, group);
+    const recent = bestGrade(st.ascents, kind, group, since);
+    return `<td>${all ? `<strong>${esc(all.grade)}</strong>` : '–'}${recent && recent.grade !== all?.grade ? `<br><small class="muted">12 mies.: ${esc(recent.grade)}</small>` : ''}</td>`;
+  };
+  const kinds = [['route', 'Drogi'], ['boulder', 'Bouldery']].filter(([k]) => st.ascents.some((a) => a.kind === k));
+  const history = kinds.map(([k, label]) => {
+    const m = gradeMilestones(st.ascents, k);
+    return m.length ? `<p><strong>${label}</strong> (${esc(systemLabel(st.ascents, k))})</p>
+      <ol class="plain-ol">${m.slice().reverse().map((x) => `<li>${esc(x.grade)} ${esc(x.style)} – ${esc(x.name || 'bez nazwy')} <small class="muted">${fmtDate(x.date)}</small></li>`).join('')}</ol>` : '';
+  }).join('');
+  return `
+    <section class="card">
+      <h2>Profil</h2>
+      <div class="grid2">
+        <label class="field"><span>Wzrost (cm)</span>
+          <input type="number" id="heightCm" inputmode="numeric" min="100" max="250" value="${h ?? ''}" placeholder="np. 178"></label>
+        <div class="field"><span>Masa ciała (trend)</span><strong class="big-val">${bw ? `${String(bw.kg).replace('.', ',')} kg` : '–'}</strong></div>
+      </div>
+      ${b ? `<p class="muted">BMI: <strong>${String(b).replace('.', ',')}</strong> – u wspinaczy z dużą masą mięśni mało miarodajne.</p>` : ''}
+      <label class="check"><input type="checkbox" id="showBmi" ${st.settings.show_bmi ? 'checked' : ''}><span>Pokazuj BMI w statystykach wagi</span></label>
+      ${kinds.length ? `
+      <table class="tbl"><thead><tr><th></th><th>Najlepsze</th><th>Flash</th><th>On-sight</th></tr></thead>
+        <tbody>${kinds.map(([k, label]) => `<tr><td>${label}</td>${cell(k, 'max')}${cell(k, 'flash')}${cell(k, 'os')}</tr>`).join('')}</tbody></table>
+      <p class="muted">Wyceny liczone automatycznie z logbooka (zakładka Przejścia). „Najlepsze” obejmuje OS, flash i RP.</p>
+      <details class="how"><summary>Historia rekordów</summary>${history}</details>`
+      : '<p class="muted">Najlepsze wyceny pojawią się po dodaniu przejść (zakładka Przejścia albo import z 8a.nu).</p>'}
+    </section>`;
+}
 
 export function renderSettings(view) {
   function importEightA(json) {
@@ -20,6 +58,7 @@ export function renderSettings(view) {
       .map(([key, s]) => `<option value="${key}" ${key === selected ? 'selected' : ''}>${esc(s.label)}</option>`).join('');
 
     view.innerHTML = `
+      ${profileHtml(st)}
       <section class="card">
         <h2>Domyślne skale wycen</h2>
         <div class="grid2">
@@ -118,6 +157,15 @@ export function renderSettings(view) {
       }
     });
 
+    view.querySelector('#heightCm').addEventListener('change', (e) => {
+      const v = parseInt(e.target.value, 10);
+      update((s) => { s.settings.height_cm = v >= 100 && v <= 250 ? v : null; });
+      toast(v >= 100 && v <= 250 ? 'Zapisano wzrost' : 'Wzrost poza zakresem 100–250 cm');
+      render();
+    });
+    view.querySelector('#showBmi').addEventListener('change', (e) => {
+      update((s) => { s.settings.show_bmi = e.target.checked; });
+    });
     view.querySelector('#routeSystem').addEventListener('change', (e) => {
       update((s) => { s.settings.routeSystem = e.target.value; });
       toast('Zapisano');

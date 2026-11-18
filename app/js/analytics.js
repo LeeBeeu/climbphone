@@ -4,6 +4,7 @@ import { getState } from './store.js';
 import { esc, today, fmtMinutes, fmtDate } from './ui.js';
 import {
   PERIODS, periods, sessionStats, ascentStats, weeklySeries, streak, acwr, ACWR_LABELS, pctChange,
+  formStats, projectGrade, FORM_DAYS, FORM_MIN_SENDS,
 } from './analytics-calc.js';
 import { weekKeyOf, weekNumber } from './plan-calc.js';
 import { strengthProtocols, strengthSeries } from './load-calc.js';
@@ -60,6 +61,38 @@ function strengthRows(st) {
   }).join('');
 }
 
+// Forma (top 10 z 90 dni wobec 12 miesięcy wcześniej) i Project grade (1–2 stopnie nad najlepszym RP z 12 mies.).
+function formHtml(st) {
+  const kinds = [['route', 'Drogi'], ['boulder', 'Bouldery']].filter(([k]) => st.ascents.some((a) => a.kind === k));
+  if (!kinds.length) return '';
+  const TREND = { up: ['↑ rośnie', 'up'], down: ['↓ spada', 'down'], flat: ['→ stabilna', ''] };
+  const rows = kinds.map(([k, label]) => {
+    const f = formStats(st.ascents, k, today());
+    const p = projectGrade(st.ascents, k, today());
+    const form = f.enough
+      ? `Forma: <strong>${esc(f.form)}</strong>${f.base ? ` <small class="muted">(wcześniej ${esc(f.base)})</small>` : ''}${
+        f.trend ? ` <span class="${TREND[f.trend][1]}">${TREND[f.trend][0]}</span>` : ''}`
+      : `Forma: <span class="muted">za mało przejść w 90 dniach (${f.count} z ${FORM_MIN_SENDS})</span>`;
+    const proj = p.grade
+      ? `Project grade: <strong>${esc(p.grade)}–${esc(p.upTo)}</strong> <small class="muted">(najlepsze RP z 12 mies.: ${esc(p.best)})</small>`
+      : 'Project grade: <span class="muted">brak przejść RP w 12 mies.</span>';
+    const open = p.projects.length
+      ? `<br><small>Otwarte projekty: ${p.projects.slice(0, 5).map((x) => `${esc(x.name)} ${esc(x.grade)}`).join(', ')}${p.projects.length > 5 ? '…' : ''}</small>` : '';
+    return `<li><strong>${label}</strong><br>${form}<br>${proj}${open}</li>`;
+  }).join('');
+  return `
+    <section class="card">
+      <h2>Forma i projekty</h2>
+      <ul class="plain">${rows}</ul>
+      <details class="how"><summary>Jak to liczymy?</summary>
+        <p>Forma = średnia wycena 10 najtrudniejszych przejść (OS, flash, RP, wędka) z ostatnich ${FORM_DAYS} dni.
+          „Wcześniej” = to samo z 12 miesięcy przed tym okresem. Różnica co najmniej pół stopnia to „rośnie” albo „spada”.</p>
+        <p>Project grade = jeden–dwa stopnie powyżej najtrudniejszego przejścia RP z ostatnich 12 miesięcy – dobry zakres na projekt.
+          Otwarte projekty = próby (styl „próba”) bez późniejszego przejścia tej samej drogi.</p>
+      </details>
+    </section>`;
+}
+
 export function renderAnalytics(view) {
   function render() {
     const st = getState();
@@ -95,6 +128,8 @@ export function renderAnalytics(view) {
              <p class="muted">Liczą się przejścia OS, Flash, RP i wędka (bez prób). „Top 10” to średnia wycena 10 najtrudniejszych przejść w okresie.</p>`
           : '<p class="muted">Brak przejść w tym ani w poprzednim okresie.</p>'}
       </section>
+
+      ${formHtml(st)}
 
       <section class="card">
         <div class="card-head"><h2>Regularność</h2><span class="muted">12 tygodni</span></div>

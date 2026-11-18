@@ -6,6 +6,10 @@ import { parseWeightCsv, splitDuplicates, toWeightCsv } from './weight-csv.js';
 import { strengthProtocols, strengthSeries, fmtAdded } from './load-calc.js';
 import { testStrengthEntries } from './tests-calc.js';
 import { backupReminderHtml, bindBackupReminder } from './backup.js';
+import {
+  changeStats, monthlyChanges, periodsInWindow, periodNames, validatePeriod, periodChange, maintenance,
+} from './weight-stats.js';
+import { bmi } from './profile-calc.js';
 
 const RANGES = [['14', '2 tyg.'], ['90', '3 mies.'], ['365', 'Rok'], ['all', 'Całość']];
 const STATUS = {
@@ -66,6 +70,11 @@ function computeModel() {
     plateau: !!goal && status !== 'in_goal' && W.isPlateau(series),
     stale: last ? W.dayNumber(today) - last.day > STALE_DAYS : false,
     ...strengthModel(st.sessions, series, testStrengthEntries(st.strengthTests)),
+    stats: changeStats(series),
+    months: monthlyChanges(series, 12),
+    periods: st.weightPeriods,
+    maint: goal ? maintenance(series, goal) : null,
+    bmi: st.settings.show_bmi && last ? bmi(last.trend, st.settings.height_cm) : null,
   };
 }
 
@@ -178,7 +187,67 @@ function summaryHtml(m) {
       </div>
       ${m.stale ? `<div class="hint">Ostatni pomiar był ${fmtDay(m.last.date)}. Trend i tempo dotyczą tamtego dnia.</div>` : ''}
       ${m.plateau ? `<div class="hint">💡 Trend stoi od ${W.PLATEAU_DAYS} dni (zmiana poniżej ${kg(W.PLATEAU_KG)} kg). ${esc(m.goal.plateau_hint || DEFAULT_HINT)}</div>` : ''}
+      ${m.maint?.inGoal ? `<div class="hint maint ${m.maint.warn ? 'warn' : ''}">🎯 Utrzymanie: trend w celu od ${m.maint.days} ${m.maint.days === 1 ? 'dnia' : 'dni'}
+        (od ${fmtDay(m.maint.since)}).${m.maint.drift !== null ? ` Zmiana w 14 dni: ${signedKg(m.maint.drift)} kg.` : ''}
+        ${m.maint.warn ? ' Trend szybko się przesuwa – pilnuj, żeby nie wyjść z przedziału.' : ''}</div>` : ''}
       <details class="info"><summary>ⓘ Jak to liczymy?</summary>${formulasHtml(m)}</details>
+    </section>`;
+}
+
+// ---------- Statystyki i zmiany miesięczne (MC-33, MC-34) ----------
+
+function statsHtml(m) {
+  if (!m.last) return '';
+  const tile = (label, c) => `<div class="tile"><span>${label}</span><b>${c ? `${signedKg(c.kg)} kg` : '–'}</b>
+    <small>${c ? `${c.pct > 0 ? '+' : c.pct < 0 ? '−' : '±'}${kg(Math.abs(c.pct), 1)}%` : 'za krótka historia'}</small></div>`;
+  const max = Math.max(0.1, ...m.months.map((x) => Math.abs(x.change)));
+  const bars = m.months.length ? `
+    <h3 class="sub-title">Zmiany miesięczne <small class="muted">(trend na koniec miesiąca)</small></h3>
+    <div class="mbars" style="grid-template-columns: repeat(${m.months.length}, minmax(0, 1fr))" role="img" aria-label="Zmiany trendu wagi miesiąc do miesiąca">
+      ${m.months.map((x) => `<div class="mbar" title="${monthLabel(`${x.month}-01`)}: ${signedKg(x.change)} kg">
+        <div class="mbar-up">${x.change > 0 ? `<span class="pos" style="height:${Math.round((x.change / max) * 100)}%"></span>` : ''}</div>
+        <div class="mbar-down">${x.change < 0 ? `<span class="neg" style="height:${Math.round((-x.change / max) * 100)}%"></span>` : ''}</div>
+        <small>${parseDate(`${x.month}-01`).toLocaleDateString('pl-PL', { month: 'short' })}</small>
+        <small class="mval">${signedKg(x.change)}</small></div>`).join('')}
+    </div>` : '';
+  return `
+    <section class="card">
+      <h2>Statystyki</h2>
+      <div class="tiles">
+        ${tile('Tydzień', m.stats.week)}${tile('Miesiąc', m.stats.month)}${tile('Rok', m.stats.year)}${tile('Od początku', m.stats.all)}
+      </div>
+      ${m.bmi ? `<p class="muted">BMI: <strong>${kg(m.bmi)}</strong> (wzrost z profilu w Ustawieniach; u wspinaczy mało miarodajne).</p>` : ''}
+      ${bars}
+    </section>`;
+}
+
+// ---------- Okresy (MC-40, MC-41) ----------
+
+let periodFormOpen = false;
+
+function periodsHtml(m) {
+  const list = [...m.periods].sort((a, b) => b.start.localeCompare(a.start));
+  return `
+    <section class="card">
+      <div class="card-head"><h2>Okresy</h2>
+        <button class="btn ghost small" id="addPeriod">${periodFormOpen ? 'Zwiń' : '+ Okres'}</button></div>
+      <p class="muted">Np. „redukcja” albo „blok Chulilla” – widoczne jako pasy na wykresie.</p>
+      ${periodFormOpen ? `
+      <form id="periodForm">
+        <label class="field"><span>Nazwa</span><input name="name" maxlength="40" list="periodNames" required placeholder="np. redukcja"></label>
+        <datalist id="periodNames">${periodNames(m.periods).map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
+        <div class="grid2">
+          <label class="field"><span>Od</span><input type="date" name="start" value="${m.today}" required></label>
+          <label class="field"><span>Do <small>(puste = trwa)</small></span><input type="date" name="end"></label>
+        </div>
+        <button class="btn primary">Zapisz okres</button>
+      </form>` : ''}
+      ${list.length ? `<ul class="plain">${list.map((p) => {
+        const ch = periodChange(m.series, p, m.today);
+        return `<li><strong>${esc(p.name)}</strong> <small class="muted">${fmtDay(p.start)} – ${p.end ? fmtDay(p.end) : 'trwa'}</small>
+          ${ch !== null ? ` · trend ${signedKg(ch)} kg` : ''}
+          <button class="icon" data-delp="${p.id}" aria-label="Usuń okres ${esc(p.name)}">🗑️</button></li>`;
+      }).join('')}</ul>` : ''}
     </section>`;
 }
 
@@ -268,6 +337,13 @@ function drawChart(el, m) {
   if (m.goal) {
     svg += `<rect class="ch-goal" x="${pad.l}" width="${width - pad.l - pad.r}"
       y="${Y(m.goal.target_max_kg)}" height="${Y(m.goal.target_min_kg) - Y(m.goal.target_max_kg)}"/>`;
+  }
+  // Okresy (MC-41): pasy na całą wysokość z nazwą u góry.
+  for (const p of periodsInWindow(m.periods, start, end, m.today)) {
+    const x1 = X(Math.max(p.s, start));
+    const x2 = X(Math.min(p.e + 1, end));
+    svg += `<rect class="ch-period" x="${x1}" y="${pad.t}" width="${Math.max(2, x2 - x1)}" height="${height - pad.t - pad.b}"><title>${esc(p.name)}</title></rect>
+      <text class="ch-period-label" x="${x1 + 3}" y="${pad.t + 10}">${esc(p.name)}</text>`;
   }
   if (today >= start && today <= end) {
     svg += `<line class="ch-today" x1="${X(today)}" x2="${X(today)}" y1="${pad.t}" y2="${height - pad.b}"/>`;
@@ -504,6 +580,8 @@ export function renderWeight(view) {
           ${model.goal ? '<span class="lg-goal"></span>cel <span class="lg-fc"></span>prognoza' : ''}</p>
         ${strengthHtml(model)}
       </section>
+      ${statsHtml(model)}
+      ${periodsHtml(model)}
       ${goalHtml(model)}
       ${listHtml(model)}
       ${dataHtml()}`;
@@ -523,6 +601,23 @@ export function renderWeight(view) {
   function bind() {
     bindBackupReminder(view, render);
     const $ = (sel) => view.querySelector(sel);
+    $('#addPeriod').addEventListener('click', () => { periodFormOpen = !periodFormOpen; render(); });
+    $('#periodForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const p = { id: uid(), name: String(f.get('name')).trim(), start: f.get('start'), end: f.get('end') || null };
+      const err = validatePeriod(p);
+      if (err) return toast(err);
+      update((s) => s.weightPeriods.push(p));
+      periodFormOpen = false;
+      toast('Dodano okres');
+      render();
+    });
+    view.querySelectorAll('[data-delp]').forEach((b) => b.addEventListener('click', () => {
+      if (!confirm('Usunąć ten okres?')) return;
+      update((s) => { s.weightPeriods = s.weightPeriods.filter((x) => x.id !== b.dataset.delp); });
+      render();
+    }));
     let whenTouched = false;
     $('#when').addEventListener('input', () => { whenTouched = true; });
 

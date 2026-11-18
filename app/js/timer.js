@@ -83,19 +83,67 @@ const audio = {
     if (!this.ctx && Ctx) this.ctx = new Ctx();
     this.ctx?.resume();
   },
-  beep(freq, dur = 0.15, vol = 0.35) {
+  master: null, // wspólne wyjście zaplanowanych dźwięków – odłączenie kasuje wszystkie naraz
+  beep(freq, dur = 0.15, vol = 0.35, at = null, out = null) {
     const c = this.ctx;
     if (!c) return;
+    const t = Math.max(c.currentTime, at ?? c.currentTime);
     const osc = c.createOscillator();
     const gain = c.createGain();
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(vol, c.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
-    osc.connect(gain).connect(c.destination);
-    osc.start();
-    osc.stop(c.currentTime + dur);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(gain).connect(out || c.destination);
+    osc.start(t);
+    osc.stop(t + dur);
+  },
+  // Dźwięki planowane z wyprzedzeniem w zegarze audio: grają w czasie nawet wtedy, gdy przeglądarka
+  // spowalnia JavaScript (np. przy wygaszonym ekranie). `events` = [{ inMs, freq, dur, vol }].
+  schedule(events) {
+    this.cancel();
+    const c = this.ctx;
+    if (!c) return;
+    this.master = c.createGain();
+    this.master.connect(c.destination);
+    const now = c.currentTime;
+    for (const e of events) if (e.inMs >= -50) this.beep(e.freq, e.dur, e.vol, now + Math.max(0, e.inMs) / 1000, this.master);
+  },
+  cancel() {
+    try { this.master?.disconnect(); } catch { /* już odłączone */ }
+    this.master = null;
   },
 };
+
+// Plan dźwięków od bieżącej fazy: start zwisu (wysoki), start przerwy (niski), odliczanie 3-2-1 przed końcem fazy,
+// fanfara na końcu. `idx` – bieżąca faza, `endMs` – ile ms do końca bieżącej fazy.
+export function beepPlan(phases, idx, endMs) {
+  const ev = [];
+  let phaseEnd = endMs;
+  for (let i = idx; i < phases.length; i++) {
+    const ph = phases[i];
+    const phaseStart = phaseEnd - ph.dur * 1000;
+    if (i > idx) {
+      if (ph.type === 'hang') ev.push({ inMs: phaseStart, freq: 1046, dur: 0.45, vol: 0.35 });
+      else if (ph.type !== 'prep') ev.push({ inMs: phaseStart, freq: 523, dur: 0.3, vol: 0.35 });
+    }
+    for (let s = 3; s >= 1; s--) if (s < ph.dur) ev.push({ inMs: phaseEnd - s * 1000, freq: 784, dur: 0.08, vol: 0.25 });
+    if (i + 1 < phases.length) phaseEnd += phases[i + 1].dur * 1000;
+  }
+  ev.push({ inMs: phaseEnd, freq: 880, dur: 0.15, vol: 0.35 }, { inMs: phaseEnd + 200, freq: 1046, dur: 0.15, vol: 0.35 },
+    { inMs: phaseEnd + 400, freq: 1318, dur: 0.5, vol: 0.35 });
+  return ev;
+}
+
+// Przerwany trening zapisany w pamięci urządzenia (wznowienie do 3 godzin, NF-05).
+const RUN_KEY = 'climbphone.run';
+export const RESUME_MAX_MS = 3 * 60 * 60 * 1000;
+function loadSavedRun() {
+  try {
+    const r = JSON.parse(localStorage.getItem(RUN_KEY) || 'null');
+    return r && Date.now() - r.savedAt < RESUME_MAX_MS ? r : null;
+  } catch { return null; }
+}
+const clearSavedRun = () => { try { localStorage.removeItem(RUN_KEY); } catch { /* brak pamięci */ } };
 
 const vibrate = (pattern) => navigator.vibrate?.(pattern);
 
@@ -115,7 +163,9 @@ export function renderTimer(view) {
   }
   // Blokada wygaszania ekranu znika po zminimalizowaniu, więc odnawiamy ją po powrocie.
   function onVisibility() {
-    if (run && !run.done && document.visibilityState === 'visible') lockScreen();
+    if (!run || run.done) return;
+    if (document.visibilityState === 'visible') lockScreen();
+    else saveRun(); // aplikacja może zostać zamknięta w tle – zapisz, żeby dało się wznowić
   }
   document.addEventListener('visibilitychange', onVisibility);
 
@@ -129,7 +179,20 @@ export function renderTimer(view) {
       const p = progression(lastHangLoad(selectedId));
       if (p) setAdded(p.base_kg);
     }
+    const saved = run ? null : loadSavedRun();
+    const savedPh = saved ? buildPhases(saved.config)[saved.idx] : null;
     view.innerHTML = `
+      <div class="seg"><a class="seg-link active">⏱ Zwisy (timer)</a><a href="#/proby" class="seg-link">🧗 Próby na ścianie</a></div>
+      ${saved ? `<section class="card resume-card" id="resumeCard">
+        <strong>⏯ Przerwany trening: ${esc(saved.config.name)}</strong>
+        <p class="muted">${savedPh?.set ? `Seria ${savedPh.set}/${saved.config.sets}` : 'Początek'} · przerwany ${
+          Math.max(1, Math.round((Date.now() - saved.savedAt) / 60000))} min temu</p>
+        <div class="row">
+          <button class="btn primary small" id="resume">▶ Wznów</button>
+          <button class="btn small" id="resumeEnd">Zakończ i zapisz</button>
+          <button class="btn ghost small" id="resumeDrop">Odrzuć</button>
+        </div>
+      </section>` : ''}
       <section class="card">
         <label class="field"><span>Protokół</span>
           <select id="preset">
@@ -142,7 +205,10 @@ export function renderTimer(view) {
               <input type="number" inputmode="numeric" min="0" max="3600" data-k="${key}" value="${config[key]}">
             </label>`).join('')}
         </div>
+        <label class="field"><span>Listwa (mm) <small>– opcjonalnie, trafi do dziennika</small></span>
+          <input type="number" id="edge" inputmode="numeric" min="4" max="60" value="${config.edge_mm ?? ''}" placeholder="np. 20"></label>
         <p class="muted">Łączny czas: <strong id="total">${fmtDuration(totalTime(config))}</strong></p>
+        <p class="muted" id="adjusted"></p>
         <div class="row">
           <button class="btn ghost small" id="save">${isCustom ? 'Zapisz zmiany' : 'Zapisz jako mój protokół'}</button>
           ${isCustom ? '<button class="btn ghost small danger" id="del">Usuń protokół</button>' : ''}
@@ -152,6 +218,32 @@ export function renderTimer(view) {
       <button class="btn primary big" id="start">▶ Start</button>
       <a class="btn ghost small" href="#/biblioteka" style="align-self:center">📚 Więcej protokołów w bibliotece ćwiczeń</a>
       <p class="muted center">Ekran nie zgaśnie w trakcie treningu. Sygnał dźwiękowy i wibracja oznaczają zmianę fazy.</p>`;
+
+    view.querySelector('#resume')?.addEventListener('click', () => resumeRun(saved));
+    view.querySelector('#resumeEnd')?.addEventListener('click', () => { resumeRun(saved); finish(false); });
+    view.querySelector('#resumeDrop')?.addEventListener('click', () => {
+      if (!confirm('Odrzucić przerwany trening? Nie trafi do dziennika.')) return;
+      clearSavedRun();
+      renderSetup();
+    });
+
+    // „Dopasuj”: zmiany czasów i serii obowiązują tylko w tej sesji, dopóki nie zapiszesz protokołu.
+    const showAdjusted = () => {
+      const base = presets().find((p) => p.id === selectedId);
+      const changed = base && FIELDS.some(([k]) => Number(base[k]) !== Number(config[k]));
+      view.querySelector('#adjusted').innerHTML = changed
+        ? 'Dopasowane tylko na tę sesję – „Zapisz”, żeby zachować. <button class="btn ghost small" id="restore">↺ Przywróć</button>'
+        : '';
+      view.querySelector('#restore')?.addEventListener('click', () => {
+        FIELDS.forEach(([k]) => { config[k] = base[k]; });
+        renderSetup();
+      });
+    };
+    showAdjusted();
+    view.querySelector('#edge').addEventListener('input', (e) => {
+      const v = parseInt(e.target.value, 10);
+      config.edge_mm = v >= 4 && v <= 60 ? v : null;
+    });
 
     view.querySelector('#preset').addEventListener('change', (e) => {
       selectedId = e.target.value;
@@ -165,6 +257,7 @@ export function renderTimer(view) {
       const min = key === 'reps' || key === 'sets' ? 1 : 0;
       config[key] = Math.max(min, Math.min(3600, parseInt(input.value, 10) || 0));
       view.querySelector('#total').textContent = fmtDuration(totalTime(config));
+      showAdjusted();
     }));
 
     view.querySelector('#save').addEventListener('click', () => {
@@ -356,6 +449,44 @@ export function renderTimer(view) {
     enterPhase();
     tick();
     run.interval = setInterval(tick, 100);
+    scheduleBeeps();
+    saveRun();
+    lockScreen();
+  }
+
+  const scheduleBeeps = () => { if (run && !run.paused && !run.done) audio.schedule(beepPlan(run.phases, run.idx, run.end - Date.now())); };
+
+  function saveRun() {
+    if (!run || run.done) return;
+    try {
+      localStorage.setItem(RUN_KEY, JSON.stringify({
+        savedAt: Date.now(), selectedId, config, runLoad, idx: run.idx, startedAt: run.startedAt, sets: run.sets,
+        left: run.paused ? run.left : Math.max(0, run.end - Date.now()),
+      }));
+    } catch { /* brak miejsca – trening działa dalej bez zapisu */ }
+  }
+
+  // Wznowienie zapisanego treningu: wraca do tej samej fazy, wstrzymany – start przyciskiem „Wznów”.
+  function resumeRun(saved) {
+    selectedId = saved.selectedId;
+    config = saved.config;
+    runLoad = saved.runLoad;
+    prefilledFor = selectedId;
+    const phases = buildPhases(config);
+    let offset = 0;
+    phases.forEach((ph) => { ph.offset = offset; offset += ph.dur; });
+    const left = Math.max(1000, saved.left);
+    run = {
+      phases, total: offset, idx: Math.min(saved.idx, phases.length - 1), end: Date.now() + left, paused: true, left,
+      lastSec: null, startedAt: saved.startedAt, interval: null, done: false, sets: saved.sets,
+    };
+    audio.init();
+    renderRunner();
+    enterPhase(true);
+    view.querySelector('#pause').textContent = '▶ Wznów';
+    view.querySelector('#runner').classList.add('paused');
+    view.querySelector('#time').textContent = fmtSeconds(Math.ceil(left / 1000));
+    run.interval = setInterval(tick, 100);
     lockScreen();
   }
 
@@ -393,18 +524,21 @@ export function renderTimer(view) {
         run.sets.slice(k).forEach((x) => { x.added_kg = v; }); // dotyczy wszystkich kolejnych serii
       }
       showSetLog(k);
+      saveRun();
     });
     view.querySelector('#skip').addEventListener('click', () => {
       if (run.paused) togglePause();
       run.end = Date.now();
       tick();
+      scheduleBeeps();
+      saveRun();
     });
     view.querySelector('#stop').addEventListener('click', () => {
       if (confirm('Przerwać trening?')) finish(false);
     });
   }
 
-  function enterPhase() {
+  function enterPhase(quiet = false) {
     const ph = run.phases[run.idx];
     const next = run.phases[run.idx + 1];
     run.lastSec = null;
@@ -431,12 +565,11 @@ export function renderTimer(view) {
       ? `Następnie: ${LABELS[next.type].toLowerCase()} ${fmtDuration(next.dur)}`
       : 'Ostatni zwis!';
 
-    if (ph.type === 'hang') {
-      audio.beep(1046, 0.45);
-      vibrate(400);
-    } else if (ph.type !== 'prep') {
-      audio.beep(523, 0.3);
-      vibrate([120, 80, 120]);
+    // Dźwięki są zaplanowane z wyprzedzeniem (beepPlan); tu tylko wibracja i zapis stanu.
+    if (!quiet) {
+      if (ph.type === 'hang') vibrate(400);
+      else if (ph.type !== 'prep') vibrate([120, 80, 120]);
+      saveRun();
     }
   }
 
@@ -475,10 +608,7 @@ export function renderTimer(view) {
     const ph = run.phases[run.idx];
     const msLeft = run.end - now;
     const left = Math.ceil(msLeft / 1000);
-    if (left !== run.lastSec) {
-      run.lastSec = left;
-      if (left <= 3 && left < ph.dur) audio.beep(784, 0.08, 0.25);
-    }
+    run.lastSec = left;
     view.querySelector('#time').textContent = fmtSeconds(left);
     const elapsed = ph.offset + ph.dur - msLeft / 1000;
     view.querySelector('#prog').style.width = `${Math.min(100, (elapsed / run.total) * 100)}%`;
@@ -490,11 +620,15 @@ export function renderTimer(view) {
       run.paused = true;
       run.left = run.end - Date.now();
       btn.textContent = '▶ Wznów';
+      audio.cancel();
     } else {
+      audio.init();
       run.paused = false;
       run.end = Date.now() + run.left;
       btn.textContent = '⏸ Pauza';
+      scheduleBeeps();
     }
+    saveRun();
     view.querySelector('#runner').classList.toggle('paused', run.paused);
   }
 
@@ -509,12 +643,9 @@ export function renderTimer(view) {
       if (s.reps_done === null) s.reps_done = donePhases.filter((p) => p.set === s.set).length;
     }
     const elapsed = Math.round((Date.now() - run.startedAt) / 1000);
-    if (completed) {
-      audio.beep(880, 0.15);
-      setTimeout(() => audio.beep(1046, 0.15), 200);
-      setTimeout(() => audio.beep(1318, 0.5), 400);
-      vibrate([200, 100, 200, 100, 400]);
-    }
+    if (completed) vibrate([200, 100, 200, 100, 400]); // fanfara jest już zaplanowana w beepPlan
+    else audio.cancel();
+    clearSavedRun();
     renderSummary(completed, doneHangs, elapsed);
   }
 
@@ -591,7 +722,9 @@ export function renderTimer(view) {
         hang_load: hangLoad,
         hang_sets: sets.map(({ set, reps_planned, reps_done, added_kg, effort }) => ({ set, reps_planned, reps_done, added_kg, effort })),
         hang_seconds: config.hang,
-        notes: [`${config.name}: ${hangsText} po ${config.hang} s`, note].filter(Boolean).join('\n'),
+        hang_edge_mm: config.edge_mm || null,
+        notes: [`${config.name}: ${hangsText} po ${config.hang} s${config.edge_mm ? `, listwa ${config.edge_mm} mm` : ''}`, note]
+          .filter(Boolean).join('\n'),
       }));
       toast('Zapisano w dzienniku');
       prefilledFor = null; // następny trening wypełni się z tej sesji
@@ -607,6 +740,9 @@ export function renderTimer(view) {
   renderSetup();
 
   return () => {
+    // Wyjście z zakładki w trakcie treningu: zapis do wznowienia, dźwięki wyłączone.
+    saveRun();
+    audio.cancel();
     if (run?.interval) clearInterval(run.interval);
     unlockScreen();
     document.removeEventListener('visibilitychange', onVisibility);

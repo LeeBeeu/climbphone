@@ -19,6 +19,7 @@ const defaults = () => ({
   // Moduł masy ciała – nazwy pól jak w docs/specyfikacja.md, żeby dało się je przenieść 1:1 do bazy.
   weightEntries: [], // weight_entries: pomiary
   weightGoals: [],   // weight_goal: aktywny cel = ostatni bez ended_at, wcześniejsze to historia
+  weightPeriods: [], // okresy na wykresie wagi: { id, name, start, end }
   settings: {
     routeSystem: 'french',
     boulderSystem: 'font',

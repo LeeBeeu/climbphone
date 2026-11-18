@@ -106,3 +106,55 @@ export const ACWR_LABELS = {
 export const pctChange = (cur, prev) => (prev ? Math.round(((cur - prev) / prev) * 100) : null);
 
 export { weekKeyOf };
+
+// ---------- Forma i Project grade ----------
+// Forma: średnia wycena 10 najtrudniejszych przejść (OS, flash, RP, wędka) z ostatnich 90 dni,
+//   porównana z 10 najtrudniejszymi z 12 miesięcy przed tym oknem. Różnica ≥ 0,5 stopnia = rośnie / spada.
+// Project grade: 1–2 stopnie powyżej najtrudniejszego przejścia RP z ostatnich 12 miesięcy.
+// Otwarte projekty: próby (GO) z 12 miesięcy bez późniejszego przejścia tej samej drogi (nazwa + rejon).
+export const FORM_DAYS = 90;
+export const FORM_MIN_SENDS = 3;
+
+const back = (key, days) => toKey(utc(key) - days * DAY_MS);
+
+export function formStats(ascents, kind, todayKey) {
+  const cur = ascentStats(ascents, { start: back(todayKey, FORM_DAYS - 1), end: todayKey }, kind);
+  const base = ascentStats(ascents, { start: back(todayKey, FORM_DAYS + 364), end: back(todayKey, FORM_DAYS) }, kind);
+  if (cur.count < FORM_MIN_SENDS) return { enough: false, count: cur.count, base: base.top10 };
+  const diff = base.count && base.system === cur.system ? Math.round((cur.top10Index - base.top10Index) * 10) / 10 : null;
+  const trend = diff === null ? null : diff >= 0.5 ? 'up' : diff <= -0.5 ? 'down' : 'flat';
+  return { enough: true, count: cur.count, form: cur.top10, base: base.top10, diff, trend };
+}
+
+export function projectGrade(ascents, kind, todayKey) {
+  const range = { start: back(todayKey, 364), end: todayKey };
+  const rp = ascents.filter((a) => a.kind === kind && a.style === 'RP' && inRange(a.date, range));
+  const st = ascentStats(rp, range, kind);
+  const projects = openProjects(ascents, kind, range);
+  if (!st.best) return { grade: null, projects };
+  const grades = SYSTEMS[st.system].grades;
+  const i = gradeIndex(st.system, st.best.grade);
+  return { grade: grades[Math.min(i + 1, grades.length - 1)], upTo: grades[Math.min(i + 2, grades.length - 1)], best: st.best.grade, projects };
+}
+
+function openProjects(ascents, kind, range) {
+  const key = (a) => `${(a.name || '').trim().toLowerCase()}|${(a.crag || '').trim().toLowerCase()}`;
+  const sends = new Map();
+  for (const a of ascents) {
+    if (a.kind !== kind || !SEND_STYLES.includes(a.style) || !a.name) continue;
+    const k = key(a);
+    if (!sends.has(k) || a.date > sends.get(k)) sends.set(k, a.date);
+  }
+  const seen = new Set();
+  return ascents
+    // Otwarty projekt = próba (GO) bez przejścia tej samej drogi w tym samym dniu albo później.
+    .filter((a) => a.kind === kind && a.name && a.style === 'GO' && inRange(a.date, range))
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .filter((a) => {
+      const k = key(a);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return !(sends.get(k) >= a.date);
+    })
+    .map((a) => ({ name: a.name, grade: a.grade, crag: a.crag || '', date: a.date }));
+}

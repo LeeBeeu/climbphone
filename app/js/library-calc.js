@@ -22,12 +22,14 @@ export function filterLibrary(list, { q = '', cat = '', equip = '', level = 0 } 
 }
 
 // Wpis do planu (dzień albo pula): „Nazwa – dawka”; protokoły timera z prefiksem „Timer:”.
-export const planItemText = (e) => `${e.kind === 'timer' ? 'Timer: ' : ''}${e.name} – ${e.dose}`;
+// Ćwiczenie jednostronne: dopisujemy „na stronę”, jeśli dawka tego nie mówi.
+const sideNote = (e) => (e.unilateral && !/stron|rękę|ręk|nogę/i.test(e.dose) ? ' (na stronę)' : '');
+export const planItemText = (e) => `${e.kind === 'timer' ? 'Timer: ' : ''}${e.name} – ${e.dose}${sideNote(e)}${e.edge_mm ? `, listwa ${e.edge_mm} mm` : ''}`;
 
 // Protokół timera z ćwiczenia (zapisywany jako własny protokół o id „lib-…”).
 export function timerPresetFrom(e) {
   if (e.kind !== 'timer') return null;
-  return { id: `lib-${e.id}`, name: e.name, ...e.timer, load_mode: 'kg', added_kg: 0, load_pct: 100 };
+  return { id: `lib-${e.id}`, name: e.name, ...e.timer, load_mode: 'kg', added_kg: 0, load_pct: 100, ...(e.edge_mm ? { edge_mm: e.edge_mm } : {}) };
 }
 
 // Ćwiczenie do dziennika z domyślnymi seriami.
@@ -36,8 +38,15 @@ export function journalExerciseFrom(e) {
   return {
     name: e.name,
     bodyweight: !!e.sets.bodyweight,
-    sets: Array.from({ length: e.sets.sets }, () => ({ reps: e.sets.reps, added_kg: 0, effort: null })),
+    // Serie o różnej liczbie powtórzeń (np. piramida) albo jednakowe.
+    sets: (e.sets.scheme || Array.from({ length: e.sets.sets }, () => e.sets.reps)).map((reps) => ({ reps, added_kg: 0, effort: null })),
   };
+}
+
+// „5, 4, 3” → [5, 4, 3]; pusty tekst → null.
+export function parseScheme(text) {
+  const parts = String(text || '').split(/[,;\s-]+/).map((x) => x.trim()).filter(Boolean);
+  return parts.length ? parts.map(Number) : null;
 }
 
 export const countByCat = (list) => Object.fromEntries(CATEGORIES.map((c) => [c.id, list.filter((e) => e.cat === c.id).length]));
@@ -66,6 +75,15 @@ export function validateExercise(e, all = LIBRARY) {
     const t = e.timer || {};
     const ok = ['prep', 'hang', 'rest', 'reps', 'sets', 'setRest'].every((k) => Number.isInteger(t[k]) && t[k] >= 0 && t[k] <= 3600);
     if (!ok || t.hang < 1 || t.reps < 1 || t.sets < 1) return 'Uzupełnij czasy timera (zwis, powtórzenia i serie większe od zera)';
+  }
+  if (e.edge_mm !== undefined && e.edge_mm !== null && !(Number.isInteger(e.edge_mm) && e.edge_mm >= 4 && e.edge_mm <= 60)) {
+    return 'Szerokość listwy: 4–60 mm';
+  }
+  if (e.kind === 'sets' && e.sets?.scheme) {
+    const sc = e.sets.scheme;
+    if (!(Array.isArray(sc) && sc.length >= 1 && sc.length <= 20 && sc.every((r) => Number.isInteger(r) && r >= 1 && r <= 200))) {
+      return 'Powtórzenia w seriach: liczby 1–200 po przecinku, np. 5, 4, 3';
+    }
   }
   if (e.kind === 'sets') {
     const s = e.sets || {};

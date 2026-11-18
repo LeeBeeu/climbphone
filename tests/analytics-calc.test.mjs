@@ -53,3 +53,31 @@ test('tygodnie, seria regularności i ACWR', () => {
   assert.equal(pctChange(150, 100), 50);
   assert.equal(pctChange(5, 0), null);
 });
+
+test('forma: top 10 z 90 dni wobec 12 miesięcy wcześniej', async () => {
+  const { formStats } = await import('../app/js/analytics-calc.js');
+  const r = (grade, date) => ({ kind: 'route', system: 'french', grade, style: 'RP', date });
+  const old = ['6c', '6c', '6c+', '7a'].map((g, i) => r(g, `2026-0${i + 1}-10`));     // przed oknem 90 dni
+  const recent = ['7a', '7a+', '7b'].map((g, i) => r(g, `2026-10-${10 + i}`));        // w oknie
+  const f = formStats([...old, ...recent], 'route', '2026-11-18');
+  assert.equal(f.enough, true);
+  assert.equal(f.form, '7a+');            // średnia z 7a, 7a+, 7b
+  assert.equal(f.base, '6c+');            // średnia z 6c, 6c, 6c+, 7a ≈ 6c+
+  assert.equal(f.trend, 'up');
+  assert.equal(formStats(old, 'route', '2026-11-18').enough, false, 'za mało przejść w 90 dniach');
+});
+
+test('project grade i otwarte projekty', async () => {
+  const { projectGrade } = await import('../app/js/analytics-calc.js');
+  const a = (grade, style, date, name, crag = 'Rejon') => ({ kind: 'route', system: 'french', grade, style, date, name, crag });
+  const asc = [
+    a('7b', 'RP', '2026-05-01', 'Rysa'), a('7a', 'OS', '2026-06-01', 'Płyta'),
+    a('7c', 'GO', '2026-07-01', 'Projekt A'), a('7c', 'GO', '2026-08-01', 'Projekt A'),
+    a('7b+', 'GO', '2026-06-01', 'Zrobiona'), a('7b+', 'RP', '2026-09-01', 'Zrobiona'),
+    a('8a', 'RP', '2024-01-01', 'Stara'),
+  ];
+  const p = projectGrade(asc, 'route', '2026-11-18');
+  assert.deepEqual([p.best, p.grade, p.upTo], ['7b+', '7c', '7c+'], 'od najlepszego RP z 12 mies. (stare 8a się nie liczy)');
+  assert.deepEqual(p.projects.map((x) => `${x.name} ${x.date}`), ['Projekt A 2026-08-01'], 'przerobione i zduplikowane pominięte');
+  assert.equal(projectGrade([], 'route', '2026-11-18').grade, null);
+});

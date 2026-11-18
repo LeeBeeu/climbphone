@@ -1,5 +1,9 @@
 import { getState, update, uid } from './store.js';
-import { esc, toast, today, fmtDate, monthLabel, fmtMinutes, startOfWeek, parseDate } from './ui.js';
+import { esc, toast, today, fmtDate, fmtDateLong, monthLabel, fmtMinutes, startOfWeek, parseDate } from './ui.js';
+import {
+  monthGrid, weekDays, shiftMonth, sessionsByDate, weekStatus, planWeekPct, STATUS_LABELS,
+} from './calendar-calc.js';
+import { weekKeyOf, shiftWeek } from './plan-calc.js';
 import { fmtAdded, fmtSets, bodyWeightOn, effortOptions } from './load-calc.js';
 import {
   exerciseCatalog, lastExercise, cleanExercises, exPct, fmtExSets, bestExSet, exKey,
@@ -46,6 +50,23 @@ let editingId = null;
 let draftEx = []; // ćwiczenia w otwartym formularzu: [{ name, bodyweight, sets: [{ reps, added_kg }] }]
 let pendingType = null;  // rodzaj treningu podpowiedziany z biblioteki
 let pendingNotes = '';   // notatka podpowiedziana z biblioteki (np. lista ćwiczeń treningu bez serii)
+let draftFields = null;  // pola formularza zapisane w szkicu (data, rodzaj, czas, RPE, notatki)
+
+// Widok: lista albo kalendarz (miesiąc / tydzień).
+let jmode = 'list';
+let calScope = 'month';
+let cal = { year: Number(today().slice(0, 4)), month: Number(today().slice(5, 7)) };
+let calWeek = weekKeyOf(today());
+let selDay = null;
+
+// Kolor rodzaju treningu w kalendarzu (kolejność jak SESSION_TYPES; własne rodzaje – szary).
+const TYPE_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#e11d48', '#a855f7', '#14b8a6', '#eab308', '#ec4899', '#94a3b8'];
+const typeColor = (type) => TYPE_COLORS[SESSION_TYPES.indexOf(type)] || '#94a3b8';
+
+// Szkic niezapisanego treningu (NF-05): przywracany po ponownym otwarciu aplikacji, do doby.
+const DRAFT_KEY = 'climbphone.draft';
+const DRAFT_MAX_MS = 24 * 60 * 60 * 1000;
+const clearDraft = () => { try { localStorage.removeItem(DRAFT_KEY); } catch { /* brak pamięci */ } };
 
 // Otwiera formularz nowego treningu z ćwiczeniami (np. „Dodaj do dziennika” w bibliotece) – przed przejściem do #/dziennik.
 // Serie każdego ćwiczenia z ostatniego wykonania, a gdy go nie było – domyślne z biblioteki.
@@ -53,6 +74,7 @@ export function openJournalWith({ exercises = [], type = null, notes = '' } = {}
   const sessions = getState().sessions;
   formOpen = true;
   editingId = null;
+  draftFields = null;
   pendingType = type;
   pendingNotes = notes;
   draftEx = exercises.map((exercise) => {
@@ -181,7 +203,8 @@ export function renderJournal(view) {
     const week = sessions.filter((s) => parseDate(s.date) >= weekStart);
     const month = sessions.filter((s) => s.date.startsWith(today().slice(0, 7)));
     const editing = sessions.find((s) => s.id === editingId);
-    const draft = editing || { date: today(), type: pendingType || SESSION_TYPES[0], duration: 90, rpe: null, notes: pendingNotes };
+    const base = editing || { date: today(), type: pendingType || SESSION_TYPES[0], duration: 90, rpe: null, notes: pendingNotes };
+    const draft = draftFields ? { ...base, ...draftFields } : base;
 
     view.innerHTML = `
       <div class="stats">
@@ -191,11 +214,24 @@ export function renderJournal(view) {
       </div>
       ${formOpen ? formHtml(draft) : '<button class="btn primary big" id="add">+ Nowy trening</button>'}
       <span class="row-links" style="align-self:flex-end"><a class="btn ghost small" href="#/biblioteka">📚 Biblioteka ćwiczeń</a><a class="btn ghost small" href="#/analityka">📊 Analityka</a></span>
-      ${listHtml([...sessions].sort(byNewest))}`;
+      <div class="seg" id="jmode">
+        <button data-m="list" class="${jmode === 'list' ? 'active' : ''}">📋 Lista</button>
+        <button data-m="calendar" class="${jmode === 'calendar' ? 'active' : ''}">📅 Kalendarz</button>
+      </div>
+      ${jmode === 'calendar' ? calendarHtml(sessions) : listHtml([...sessions].sort(byNewest))}`;
 
+    view.querySelectorAll('#jmode button').forEach((b) => b.addEventListener('click', () => { jmode = b.dataset.m; render(); }));
+    bindCalendar();
     view.querySelector('#add')?.addEventListener('click', () => openForm(null));
     view.querySelector('#cancel')?.addEventListener('click', closeForm);
-    if (formOpen) bindExercises();
+    if (formOpen) {
+      bindExercises();
+      const form = view.querySelector('#form');
+      // NF-05: szkic formularza zapisywany przy każdej zmianie (także serii ćwiczeń).
+      form.addEventListener('input', () => persistDraft(form));
+      form.addEventListener('change', () => persistDraft(form));
+      form.addEventListener('click', () => setTimeout(() => persistDraft(form)));
+    }
     view.querySelector('#form')?.addEventListener('submit', (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
@@ -289,6 +325,7 @@ export function renderJournal(view) {
   function openForm(id) {
     formOpen = true;
     editingId = id;
+    draftFields = null;
     const s = id ? getState().sessions.find((x) => x.id === id) : null;
     draftEx = structuredClone(s?.exercises || []);
     render();
@@ -300,7 +337,126 @@ export function renderJournal(view) {
     draftEx = [];
     pendingType = null;
     pendingNotes = '';
+    draftFields = null;
+    clearDraft();
     render();
+  }
+
+  // ---------- Kalendarz ----------
+
+  function calendarHtml(sessions) {
+    const st = getState();
+    const byDate = sessionsByDate(sessions);
+    const todayKey = today();
+    const statusOf = (week) => weekStatus(planWeekPct(st.plans, st.planChecks, week), week, todayKey);
+    const statusDot = (week) => {
+      const s = statusOf(week);
+      return s ? `<span class="wk-status ${s}" title="Plan: ${STATUS_LABELS[s]}"></span>` : '';
+    };
+    const dots = (list) => list.slice(0, 3).map((s) => `<i style="background:${typeColor(s.type)}"></i>`).join('')
+      + (list.length > 3 ? '<b>+</b>' : '');
+    let body;
+    if (calScope === 'month') {
+      const grid = monthGrid(cal.year, cal.month);
+      const ym = `${cal.year}-${String(cal.month).padStart(2, '0')}`;
+      const title = parseDate(`${ym}-01`).toLocaleDateString('pl-PL', { month: 'long', year: 'numeric' });
+      body = `
+        <div class="cal-head"><button class="btn small" data-cal="-1" aria-label="Poprzedni miesiąc">‹</button>
+          <strong>${title}</strong><button class="btn small" data-cal="1" aria-label="Następny miesiąc">›</button></div>
+        <div class="cal-grid">
+          <span class="cal-h">T.</span>${['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd'].map((d) => `<span class="cal-h">${d}</span>`).join('')}
+          ${grid.map((w) => `<span class="cal-wk">${Number(w.week.split('-W')[1])}${statusDot(w.week)}</span>
+            ${w.days.map((d) => {
+              const list = byDate[d] || [];
+              return `<button class="cal-day ${d.startsWith(ym) ? '' : 'other'} ${d === todayKey ? 'today' : ''} ${d === selDay ? 'sel' : ''}"
+                data-day="${d}" aria-label="${fmtDate(d)}: ${list.length} ${list.length === 1 ? 'trening' : 'treningów'}">
+                <span>${Number(d.slice(8))}</span><span class="cal-dots">${dots(list)}</span></button>`;
+            }).join('')}`).join('')}
+        </div>`;
+    } else {
+      const days = weekDays(calWeek);
+      body = `
+        <div class="cal-head"><button class="btn small" data-calw="-1" aria-label="Poprzedni tydzień">‹</button>
+          <strong>Tydzień ${Number(calWeek.split('-W')[1])} ${statusDot(calWeek)}</strong>
+          <button class="btn small" data-calw="1" aria-label="Następny tydzień">›</button></div>
+        <ul class="list cal-week">${days.map((d) => {
+          const list = byDate[d] || [];
+          return `<li><button class="item cal-wrow ${d === todayKey ? 'today' : ''}" data-day="${d}">
+            <span class="cal-wd">${parseDate(d).toLocaleDateString('pl-PL', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+            <span>${list.length ? list.map((s) => `<span class="cal-tag" style="border-color:${typeColor(s.type)}">${esc(s.type)} · ${fmtMinutes(Number(s.duration) || 0)}</span>`).join(' ')
+              : '<small class="muted">odpoczynek</small>'}</span></button></li>`;
+        }).join('')}</ul>`;
+    }
+    // Legenda: rodzaje treningów widoczne w pokazanym okresie.
+    const shown = calScope === 'month' ? monthGrid(cal.year, cal.month).flatMap((w) => w.days) : weekDays(calWeek);
+    const used = [...new Set(shown.flatMap((d) => (byDate[d] || []).map((s) => s.type)))];
+    const selList = selDay ? (byDate[selDay] || []) : [];
+    return `
+      <section class="card cal">
+        <div class="seg" id="calScope">
+          <button data-s="month" class="${calScope === 'month' ? 'active' : ''}">Miesiąc</button>
+          <button data-s="week" class="${calScope === 'week' ? 'active' : ''}">Tydzień</button>
+        </div>
+        ${body}
+        <p class="muted legend">${used.slice(0, 9).map((t) => `<span class="lg-type" style="background:${typeColor(t)}"></span>${esc(t)}`).join(' ')}</p>
+        <p class="muted legend"><span class="wk-status done"></span>plan wykonany <span class="wk-status partial"></span>częściowo
+          <span class="wk-status missed"></span>pominięty</p>
+      </section>
+      ${selDay ? `<h3 class="group-title">${fmtDateLong(selDay)}</h3>
+        ${selList.length ? listHtml([...selList].sort(byNewest)).replace(/<h3 class="group-title">[^<]*<\/h3>/, '') : '<p class="muted">Brak treningów tego dnia.</p>'}
+        <button class="btn" id="addOnDay">+ Trening tego dnia</button>` : ''}`;
+  }
+
+  function bindCalendar() {
+    view.querySelectorAll('#calScope button').forEach((b) => b.addEventListener('click', () => {
+      calScope = b.dataset.s;
+      if (calScope === 'week') calWeek = weekKeyOf(selDay || today());
+      render();
+    }));
+    view.querySelectorAll('[data-cal]').forEach((b) => b.addEventListener('click', () => {
+      cal = shiftMonth(cal.year, cal.month, Number(b.dataset.cal));
+      render();
+    }));
+    view.querySelectorAll('[data-calw]').forEach((b) => b.addEventListener('click', () => {
+      calWeek = shiftWeek(calWeek, Number(b.dataset.calw));
+      render();
+    }));
+    view.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => {
+      selDay = selDay === b.dataset.day ? null : b.dataset.day;
+      render();
+    }));
+    view.querySelector('#addOnDay')?.addEventListener('click', () => {
+      openForm(null);
+      draftFields = { date: selDay };
+      render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  function persistDraft(form) {
+    if (!formOpen || !form.isConnected) return;
+    const f = new FormData(form);
+    draftFields = {
+      date: f.get('date'), type: f.get('type'), duration: f.get('duration'),
+      rpe: f.get('rpe') ? Number(f.get('rpe')) : null, notes: f.get('notes'),
+    };
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: Date.now(), editingId, fields: draftFields, draftEx }));
+    } catch { /* brak pamięci */ }
+  }
+
+  // Po ponownym otwarciu aplikacji: przywróć niezapisany formularz (do doby).
+  if (!formOpen) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+      if (saved && Date.now() - saved.at < DRAFT_MAX_MS) {
+        formOpen = true;
+        editingId = saved.editingId && getState().sessions.some((s) => s.id === saved.editingId) ? saved.editingId : null;
+        draftFields = saved.fields;
+        draftEx = saved.draftEx || [];
+        setTimeout(() => toast('Przywrócono niezapisany wpis'), 0);
+      }
+    } catch { /* uszkodzony szkic – pomijamy */ }
   }
 
   render();

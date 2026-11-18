@@ -6,7 +6,7 @@ import { esc, toast } from './ui.js';
 import {
   CATEGORIES, EQUIPMENT, KINDS, filterLibrary, catLabel, planItemText, timerPresetFrom, journalExerciseFrom, countByCat,
   allExercises, findExercise, validateExercise, copyAsCustom, allWorkouts, workoutExercises, workoutPlanItems,
-  workoutPoolItem, workoutJournal, removeFromWorkouts,
+  workoutPoolItem, workoutJournal, removeFromWorkouts, parseScheme,
 } from './library-calc.js';
 import { LEVELS } from './library-data.js';
 import { selectTimerPreset } from './timer.js';
@@ -118,7 +118,7 @@ export function renderLibrary(view) {
           <li><button class="item lib-item" data-open="${e.id}">
             <div class="item-main">
               <div class="item-title">${esc(e.name)}${e.custom ? ' <span class="own-tag">własne</span>' : ''}</div>
-              <div class="item-sub">${esc(e.dose)}</div>
+              <div class="item-sub">${esc(e.dose)}${e.unilateral ? ' · ↔ na stronę' : ''}</div>
               <div class="item-sub">${levelDots(e.level)} ${esc(e.equip.map((k) => EQUIPMENT[k]).join(', '))}</div>
             </div>
             <span class="muted" aria-hidden="true">›</span>
@@ -193,6 +193,11 @@ export function renderLibrary(view) {
           ${e.custom ? '<span class="own-tag">własne</span>' : ''}</p>
         <p class="muted">Sprzęt: ${esc(e.equip.map((k) => EQUIPMENT[k]).join(', '))} · ${KINDS[e.kind]}</p>
         <p><strong>${esc(e.dose)}</strong></p>
+        ${e.unilateral || e.edge_mm || e.sets?.scheme ? `<p class="muted">${[
+          e.unilateral ? '↔ jednostronne – dawka na każdą stronę' : '',
+          e.edge_mm ? `listwa ${e.edge_mm} mm` : '',
+          e.sets?.scheme ? `powtórzenia w seriach: ${e.sets.scheme.join('-')}` : '',
+        ].filter(Boolean).join(' · ')}</p>` : ''}
         <h3>Jak wykonać</h3>
         <p class="pre">${esc(e.how)}</p>
         ${e.tips ? `<h3>Progresja i wskazówki</h3><p class="pre">${esc(e.tips)}</p>` : ''}
@@ -302,14 +307,18 @@ export function renderLibrary(view) {
         </div>
         <label class="field"><span>Rodzaj</span>
           <select name="kind">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${k === d.kind ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
+        <label class="check"><input type="checkbox" name="unilateral" ${d.unilateral ? 'checked' : ''}><span>Jednostronne (dawka na każdą stronę)</span></label>
         ${d.kind === 'timer' ? `<div class="grid2">
           ${num('prep', 'Przygotowanie (s)', d.timer.prep)}${num('hang', 'Zwis / praca (s)', d.timer.hang, 1)}
           ${num('rest', 'Odpoczynek (s)', d.timer.rest)}${num('reps', 'Powtórzenia', d.timer.reps, 1)}
           ${num('sets', 'Serie', d.timer.sets, 1)}${num('setRest', 'Przerwa między seriami (s)', d.timer.setRest)}
+          ${num('edge', 'Listwa (mm, opcjonalnie)', d.edge_mm ?? '', 4, 60)}
         </div>` : ''}
         ${d.kind === 'sets' ? `<div class="grid2">
           ${num('setsN', 'Serie', d.sets.sets, 1, 20)}${num('reps', 'Powtórzenia', d.sets.reps, 1, 200)}
         </div>
+        <label class="field"><span>Różne powtórzenia w seriach (opcjonalnie, np. 5, 4, 3 albo 1-2-3-2-1)</span>
+          <input name="scheme" maxlength="80" value="${esc(d.sets.scheme ? d.sets.scheme.join(', ') : '')}"></label>
         <label class="check"><input type="checkbox" name="bodyweight" ${d.sets.bodyweight ? 'checked' : ''}>
           <span>Z masą ciała (kg w dzienniku to dociążenie, liczymy % masy ciała)</span></label>` : ''}
         <fieldset class="day"><strong>Sprzęt</strong>
@@ -334,8 +343,16 @@ export function renderLibrary(view) {
       d.how = f.elements.how.value;
       d.tips = f.elements.tips.value;
       d.equip = [...f.querySelectorAll('[name="equip"]:checked')].map((x) => x.value);
-      if (d.kind === 'timer') ['prep', 'hang', 'rest', 'reps', 'sets', 'setRest'].forEach((k) => { d.timer[k] = int(k); });
-      if (d.kind === 'sets') d.sets = { sets: int('setsN'), reps: int('reps'), bodyweight: f.elements.bodyweight.checked };
+      d.unilateral = f.elements.unilateral.checked;
+      if (d.kind === 'timer') {
+        ['prep', 'hang', 'rest', 'reps', 'sets', 'setRest'].forEach((k) => { d.timer[k] = int(k); });
+        d.edge_mm = f.elements.edge.value ? int('edge') : null;
+      }
+      if (d.kind === 'sets') {
+        const scheme = parseScheme(f.elements.scheme.value);
+        d.sets = { sets: scheme ? scheme.length : int('setsN'), reps: scheme ? Math.max(...scheme.filter(Number.isFinite), 1) : int('reps'),
+          bodyweight: f.elements.bodyweight.checked, ...(scheme ? { scheme } : {}) };
+      }
     }
     f.elements.kind.addEventListener('change', () => {
       sync();
@@ -353,6 +370,8 @@ export function renderLibrary(view) {
         id, name: d.name.trim(), cat: d.cat, level: d.level, equip: d.equip, kind: d.kind, dose: d.dose.trim(),
         how: d.how.trim(), tips: (d.tips || '').trim(), custom: true,
         ...(d.caution ? { caution: d.caution } : {}),
+        ...(d.unilateral ? { unilateral: true } : {}),
+        ...(d.kind === 'timer' && d.edge_mm ? { edge_mm: d.edge_mm } : {}),
         ...(d.kind === 'timer' ? { timer: { ...d.timer } } : {}),
         ...(d.kind === 'sets' ? { sets: { ...d.sets } } : {}),
       };

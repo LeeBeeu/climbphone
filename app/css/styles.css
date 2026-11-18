@@ -606,3 +606,63 @@ details[open] summary { margin-bottom: 8px; }
 .wk-edit .icon { min-width: 0; width: 32px; padding: 0; }
 .wk-edit .icon:disabled { opacity: .3; }
 .equip-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 8px; }
+
+/* Wznowienie przerwanego treningu */
+.resume-card { border-left: 4px solid var(--accent); }
+.resume-card p { margin: 4px 0 8px; }
+
+/* Przełącznik Zwisy | Próby i tryb prób */
+.seg-link { flex: 1; text-align: center; padding: 8px 6px; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 600; font-size: 14px; }
+.seg-link.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.runner.att-climb { background: var(--hang); }
+.runner.att-rest { background: var(--rest); }
+.runner.att-idle { background: var(--surface2); color: var(--text); }
+.att-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.att-actions .btn.big { min-height: 72px; font-size: 20px; }
+.att-list { margin: 6px 0 0; padding-left: 24px; display: flex; flex-direction: column; gap: 4px; font-variant-numeric: tabular-nums; }
+
+/* Kalendarz treningów */
+.cal-head { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; text-align: center; margin: 10px 0 6px; }
+.cal-head strong { display: inline-block; }
+.cal-head strong::first-letter, .cal-wd::first-letter { text-transform: uppercase; }
+.cal-head .btn.small { min-height: 40px; font-size: 20px; padding: 0; }
+.cal-grid { display: grid; grid-template-columns: 30px repeat(7, minmax(0, 1fr)); gap: 3px; }
+.cal-h { font-size: 11px; color: var(--muted); text-align: center; }
+.cal-wk { font-size: 10px; color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.cal-day { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 0; min-height: 46px; border-radius: 8px;
+  border: 1px solid transparent; background: var(--surface2); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.cal-day.other { opacity: .4; }
+.cal-day.today { border-color: var(--accent); font-weight: 700; }
+.cal-day.sel { background: var(--accent); color: #fff; }
+.cal-dots { display: flex; gap: 2px; align-items: center; min-height: 7px; }
+.cal-dots i { display: block; width: 7px; height: 7px; border-radius: 50%; }
+.cal-dots b { font-size: 9px; line-height: 1; }
+.wk-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: middle; }
+.wk-status.done { background: var(--ok); }
+.wk-status.partial { background: var(--fl); }
+.wk-status.missed { background: var(--danger); }
+.lg-type { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 3px 0 8px; vertical-align: middle; }
+.cal-wrow { width: 100%; display: grid; grid-template-columns: 92px 1fr; gap: 8px; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.cal-wrow.today { border: 1px solid var(--accent); }
+.cal-wd { font-weight: 600; }
+.cal-tag { display: inline-block; border-left: 4px solid; padding: 1px 6px; margin: 2px 0; font-size: 13px; background: var(--surface2); border-radius: 4px; }
+
+/* Profil */
+.big-val { font-size: 20px; padding: 8px 0; }
+.plain-ol { margin: 4px 0 8px; padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 3px; }
+
+/* Waga: okresy, zmiany miesięczne, utrzymanie */
+.ch-period { fill: var(--fl); opacity: .12; }
+.ch-period-label { fill: var(--muted); font-size: 10px; font-family: inherit; }
+.hint.maint { border-left-color: var(--ok); }
+.hint.maint.warn { border-left-color: var(--fl); }
+.mbars { display: grid; gap: 4px; align-items: stretch; margin: 6px 0; }
+.mbar { display: grid; grid-template-rows: 50px 50px auto auto; justify-items: center; }
+.mbar-up, .mbar-down { width: 100%; display: flex; justify-content: center; }
+.mbar-up { align-items: flex-end; border-bottom: 1px solid var(--border); }
+.mbar-down { align-items: flex-start; }
+.mbar span { display: block; width: 70%; min-height: 2px; border-radius: 3px; }
+.mbar .pos { background: var(--danger); }
+.mbar .neg { background: var(--ok); }
+.mbar small { font-size: 10px; color: var(--muted); }
+.mbar .mval { font-size: 9px; }
