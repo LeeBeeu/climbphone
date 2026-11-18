@@ -1,6 +1,9 @@
 // Biblioteka ćwiczeń: wyszukiwanie i przeliczenia na plan, timer i dziennik. Czyste funkcje, bez DOM
 // (testy: tests/library.test.mjs).
 import { LIBRARY, CATEGORIES, EQUIPMENT, WORKOUTS } from './library-data.js';
+import { TYPES, GOALS, exType, exGoals, typeLabel, goalLabel } from './library-tags.js';
+
+export { TYPES, GOALS, exType, exGoals, typeLabel, goalLabel };
 
 // Bez polskich znaków i wielkości liter: „palcow” znajdzie „palców”.
 export const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ł/g, 'l');
@@ -8,15 +11,18 @@ export const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replac
 export const byId = (id) => LIBRARY.find((e) => e.id === id) || null;
 export const catLabel = (id) => CATEGORIES.find((c) => c.id === id)?.label || id;
 
-// Filtr: { q, cat, equip, level } – puste pola nie filtrują; level = maksymalny poziom.
-export function filterLibrary(list, { q = '', cat = '', equip = '', level = 0 } = {}) {
+// Filtr: { q, cat, equip, level, type, goal } – puste pola nie filtrują; level = maksymalny poziom.
+export function filterLibrary(list, { q = '', cat = '', equip = '', level = 0, type = '', goal = '' } = {}) {
   const words = fold(q).split(/\s+/).filter(Boolean);
   return list.filter((e) => {
     if (cat && e.cat !== cat) return false;
+    if (type && exType(e) !== type) return false;
+    if (goal && !exGoals(e).includes(goal)) return false;
     if (equip && !e.equip.includes(equip)) return false;
     if (level && e.level > level) return false;
     if (!words.length) return true;
-    const hay = fold(`${e.name} ${e.how} ${e.tips || ''} ${catLabel(e.cat)} ${e.equip.map((k) => EQUIPMENT[k]).join(' ')}`);
+    const hay = fold(`${e.name} ${e.how} ${e.tips || ''} ${catLabel(e.cat)} ${e.equip.map((k) => EQUIPMENT[k]).join(' ')} `
+      + `${typeLabel(exType(e))} ${exGoals(e).map(goalLabel).join(' ')}`);
     return words.every((w) => hay.includes(w));
   });
 }
@@ -69,6 +75,8 @@ export function validateExercise(e, all = LIBRARY) {
   if (!(e.level >= 1 && e.level <= 3)) return 'Wybierz poziom';
   if (!(e.kind in KINDS)) return 'Wybierz rodzaj ćwiczenia';
   if (!e.equip?.length || !e.equip.every((k) => k in EQUIPMENT)) return 'Wybierz co najmniej jeden sprzęt (albo „bez sprzętu”)';
+  if (e.type && !TYPES.some((t) => t.id === e.type)) return 'Wybierz typ treningu';
+  if (e.goals && !e.goals.every((g) => GOALS.some((x) => x.id === g))) return 'Nieznany cel ćwiczenia';
   if (!String(e.dose || '').trim()) return 'Podaj dawkę, np. „4 × 6” albo „20 min”';
   if (!String(e.how || '').trim()) return 'Opisz krótko, jak wykonać ćwiczenie';
   if (e.kind === 'timer') {
@@ -97,7 +105,8 @@ export function validateExercise(e, all = LIBRARY) {
 // „Kopiuj jako własne”: kopia ćwiczenia z biblioteki do zmiany dawki albo opisu.
 export function copyAsCustom(e, id) {
   const { custom: _c, ...rest } = structuredClone(e);
-  return { ...rest, id, name: `${e.name} (moje)`, custom: true };
+  // Typ i cele zapisujemy wprost – kopia ma nowe id, więc nie trafiłaby już na listę wyjątków.
+  return { ...rest, id, name: `${e.name} (moje)`, custom: true, type: exType(e), goals: [...exGoals(e)] };
 }
 
 // ---------- Treningi (zestawy ćwiczeń) ----------

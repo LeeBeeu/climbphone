@@ -231,7 +231,7 @@ function periodsHtml(m) {
     <section class="card">
       <div class="card-head"><h2>Okresy</h2>
         <button class="btn ghost small" id="addPeriod">${periodFormOpen ? 'Zwiń' : '+ Okres'}</button></div>
-      <p class="muted">Np. „redukcja” albo „blok Chulilla” – widoczne jako pasy na wykresie.</p>
+      <p class="muted">Np. „redukcja” albo „blok Chulilla” – widoczne jako pasy na wykresach wagi, siły względnej, testów i w analityce.</p>
       ${periodFormOpen ? `
       <form id="periodForm">
         <label class="field"><span>Nazwa</span><input name="name" maxlength="40" list="periodNames" required placeholder="np. redukcja"></label>
@@ -396,6 +396,12 @@ function drawStrength(el, m) {
     svg += `<text class="ch-label" x="${X(d)}" y="${height - 6}" text-anchor="middle">${label}</text>`;
   }
   svg += '<g clip-path="url(#plotS)">';
+  // Okresy (MC-41) także na wykresie siły względnej.
+  for (const p of periodsInWindow(m.periods, start, end, m.today)) {
+    const x1 = X(Math.max(p.s, start));
+    const x2 = X(Math.min(p.e + 1, end));
+    svg += `<rect class="ch-period" x="${x1}" y="${pad.t}" width="${Math.max(2, x2 - x1)}" height="${height - pad.t - pad.b}"><title>${esc(p.name)}</title></rect>`;
+  }
   if (100 >= lo && 100 <= hi) {
     svg += `<line class="ch-bw" x1="${pad.l}" x2="${width - pad.r}" y1="${Y(100)}" y2="${Y(100)}"/>`;
   }

@@ -6,13 +6,13 @@ import { esc, toast } from './ui.js';
 import {
   CATEGORIES, EQUIPMENT, KINDS, filterLibrary, catLabel, planItemText, timerPresetFrom, journalExerciseFrom, countByCat,
   allExercises, findExercise, validateExercise, copyAsCustom, allWorkouts, workoutExercises, workoutPlanItems,
-  workoutPoolItem, workoutJournal, removeFromWorkouts, parseScheme,
+  workoutPoolItem, workoutJournal, removeFromWorkouts, parseScheme, TYPES, GOALS, exType, exGoals, typeLabel, goalLabel,
 } from './library-calc.js';
 import { LEVELS } from './library-data.js';
 import { selectTimerPreset } from './timer.js';
 import { openJournalWith } from './journal.js';
 
-const filters = { q: '', cat: '', equip: '', level: 0 };
+const filters = { q: '', cat: '', equip: '', level: 0, type: '', goal: '' };
 let mode = 'exercises';  // 'exercises' | 'workouts'
 let openId = null;       // otwarte ćwiczenie
 let openWorkout = null;  // otwarty trening
@@ -147,6 +147,14 @@ export function renderLibrary(view) {
               <option value="1" ${filters.level === 1 ? 'selected' : ''}>tylko początkujący</option>
               <option value="2" ${filters.level === 2 ? 'selected' : ''}>do średniozaawansowanego</option>
             </select></label>
+          <label class="field"><span>Typ treningu</span>
+            <select id="ltype"><option value="">każdy</option>
+              ${TYPES.map((t) => `<option value="${t.id}" ${filters.type === t.id ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
+            </select></label>
+          <label class="field"><span>Cel</span>
+            <select id="lgoal"><option value="">każdy</option>
+              ${GOALS.map((g) => `<option value="${g.id}" ${filters.goal === g.id ? 'selected' : ''}>${esc(g.label)}</option>`).join('')}
+            </select></label>
         </div>
         <p class="muted">Opisy są ogólną wiedzą treningową, nie zastępują trenera. ● początkujący · ●● po ok. 1–2 latach · ●●● zaawansowani.</p>
       </section>
@@ -166,6 +174,8 @@ export function renderLibrary(view) {
     }));
     view.querySelector('#lequip').addEventListener('change', (ev) => { filters.equip = ev.target.value; drawList(); });
     view.querySelector('#llevel').addEventListener('change', (ev) => { filters.level = Number(ev.target.value); drawList(); });
+    view.querySelector('#ltype').addEventListener('change', (ev) => { filters.type = ev.target.value; drawList(); });
+    view.querySelector('#lgoal').addEventListener('change', (ev) => { filters.goal = ev.target.value; drawList(); });
     view.querySelector('#newEx').addEventListener('click', () => {
       exDraft = { id: null, name: '', cat: filters.cat || 'fingers', level: 1, equip: ['wall'], kind: 'sets', dose: '', how: '', tips: '',
         timer: { prep: 10, hang: 10, rest: 0, reps: 1, sets: 5, setRest: 180 }, sets: { sets: 3, reps: 8, bodyweight: true } };
@@ -192,6 +202,7 @@ export function renderLibrary(view) {
         <p class="lib-meta"><span class="phase-chip">${esc(catLabel(e.cat))}</span> ${levelDots(e.level)} <small class="muted">${esc(LEVELS[e.level])}</small>
           ${e.custom ? '<span class="own-tag">własne</span>' : ''}</p>
         <p class="muted">Sprzęt: ${esc(e.equip.map((k) => EQUIPMENT[k]).join(', '))} · ${KINDS[e.kind]}</p>
+        <p class="muted">Typ: <strong>${esc(typeLabel(exType(e)))}</strong> · Cel: ${exGoals(e).map((g) => `<span class="goal-tag">${esc(goalLabel(g))}</span>`).join(' ')}</p>
         <p><strong>${esc(e.dose)}</strong></p>
         ${e.unilateral || e.edge_mm || e.sets?.scheme ? `<p class="muted">${[
           e.unilateral ? '↔ jednostronne – dawka na każdą stronę' : '',
@@ -321,6 +332,11 @@ export function renderLibrary(view) {
           <input name="scheme" maxlength="80" value="${esc(d.sets.scheme ? d.sets.scheme.join(', ') : '')}"></label>
         <label class="check"><input type="checkbox" name="bodyweight" ${d.sets.bodyweight ? 'checked' : ''}>
           <span>Z masą ciała (kg w dzienniku to dociążenie, liczymy % masy ciała)</span></label>` : ''}
+        <label class="field"><span>Typ treningu</span>
+          <select name="type">${TYPES.map((t) => `<option value="${t.id}" ${t.id === exType(d) ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select></label>
+        <fieldset class="day"><strong>Cel (co rozwija)</strong>
+          <div class="equip-grid">${GOALS.map((g) => `<label class="check"><input type="checkbox" name="goal" value="${g.id}" ${exGoals(d).includes(g.id) ? 'checked' : ''}><span>${esc(g.label)}</span></label>`).join('')}</div>
+        </fieldset>
         <fieldset class="day"><strong>Sprzęt</strong>
           <div class="equip-grid">${Object.entries(EQUIPMENT).map(([k, v]) => `<label class="check"><input type="checkbox" name="equip" value="${k}" ${d.equip.includes(k) ? 'checked' : ''}><span>${esc(v)}</span></label>`).join('')}</div>
         </fieldset>
@@ -343,6 +359,8 @@ export function renderLibrary(view) {
       d.how = f.elements.how.value;
       d.tips = f.elements.tips.value;
       d.equip = [...f.querySelectorAll('[name="equip"]:checked')].map((x) => x.value);
+      d.type = f.elements.type.value;
+      d.goals = [...f.querySelectorAll('[name="goal"]:checked')].map((x) => x.value);
       d.unilateral = f.elements.unilateral.checked;
       if (d.kind === 'timer') {
         ['prep', 'hang', 'rest', 'reps', 'sets', 'setRest'].forEach((k) => { d.timer[k] = int(k); });
@@ -368,6 +386,7 @@ export function renderLibrary(view) {
       const id = d.id || `own-${uid()}`;
       const ex = {
         id, name: d.name.trim(), cat: d.cat, level: d.level, equip: d.equip, kind: d.kind, dose: d.dose.trim(),
+        type: d.type, goals: d.goals,
         how: d.how.trim(), tips: (d.tips || '').trim(), custom: true,
         ...(d.caution ? { caution: d.caution } : {}),
         ...(d.unilateral ? { unilateral: true } : {}),
@@ -419,6 +438,8 @@ export function renderLibrary(view) {
       <section class="card">
         <h2>${esc(w.name)}</h2>
         ${w.desc ? `<p class="muted">${esc(w.desc)}</p>` : ''}
+        ${ex.length ? `<p class="muted">Typy: ${Object.entries(ex.reduce((m, e) => { const t = typeLabel(exType(e)); m[t] = (m[t] || 0) + 1; return m; }, {}))
+          .map(([t, n]) => `${esc(t)} ×${n}`).join(' · ')}</p>` : ''}
         <ol class="wk-list">${ex.map((e) => `<li><button class="link" data-open="${e.id}">${esc(e.name)}</button>
           <small class="muted">${esc(e.dose)}</small></li>`).join('')}</ol>
         ${ex.length < w.items.length ? '<p class="muted">Część ćwiczeń usunięto z biblioteki – pominięte.</p>' : ''}

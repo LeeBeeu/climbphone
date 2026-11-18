@@ -3,6 +3,7 @@ import { getState, update, uid } from './store.js';
 import { esc, toast, today, fmtDate, parseDate } from './ui.js';
 import { bodyWeightOn, fmtAdded, loadFromAdded } from './load-calc.js';
 import { dayNumber, keyFromDayNumber } from './weight-calc.js';
+import { periodsInWindow } from './weight-stats.js';
 import {
   TESTS, GRIPS, testById, valueLabel, valueStep, fmtMetric, fmtValue, testHistory, bestResult, variantLabel,
 } from './tests-calc.js';
@@ -131,6 +132,13 @@ function drawChart(el, def, history) {
     const opts = end - start > 300 ? { month: 'short', year: '2-digit' } : { day: 'numeric', month: 'short' };
     svg += `<text class="ch-label" x="${X(d)}" y="${height - 6}" text-anchor="${i === 0 ? 'start' : i === ticks ? 'end' : 'middle'}">${
       parseDate(keyFromDayNumber(d)).toLocaleDateString('pl-PL', opts)}</text>`;
+  }
+  // Okresy z zakładki Waga (np. „blok siły”) jako pasy z nazwą.
+  for (const p of periodsInWindow(getState().weightPeriods, Math.floor(start), Math.ceil(end), today())) {
+    const x1 = X(Math.max(p.s, start));
+    const x2 = X(Math.min(p.e + 1, end));
+    svg += `<rect class="ch-period" x="${x1}" y="${pad.t}" width="${Math.max(2, x2 - x1)}" height="${height - pad.t - pad.b}"><title>${esc(p.name)}</title></rect>
+      <text class="ch-period-label" x="${x1 + 3}" y="${pad.t + 10}">${esc(p.name)}</text>`;
   }
   const best = bestResult(history, main);
   if (best) svg += `<line class="ch-best" x1="${pad.l}" x2="${width - pad.r}" y1="${Y(best.metric)}" y2="${Y(best.metric)}"/>`;

@@ -6,7 +6,7 @@ import {
   PERIODS, periods, sessionStats, ascentStats, weeklySeries, streak, acwr, ACWR_LABELS, pctChange,
   formStats, projectGrade, FORM_DAYS, FORM_MIN_SENDS,
 } from './analytics-calc.js';
-import { weekKeyOf, weekNumber } from './plan-calc.js';
+import { weekKeyOf, weekNumber, weekRange } from './plan-calc.js';
 import { strengthProtocols, strengthSeries } from './load-calc.js';
 import { testStrengthEntries } from './tests-calc.js';
 import { buildSeries } from './weight-calc.js';
@@ -27,14 +27,29 @@ function delta(cur, prev, unit = '%') {
 
 const tile = (value, label, cmp) => `<div class="stat"><b>${value}</b><span>${label}</span><small>${cmp}</small></div>`;
 
-// Słupki tygodniowe (CSS): wartości i podpis co drugi tydzień.
-function barsHtml(series, value, title, fmt = (v) => v) {
+// Okresy z zakładki Waga, które zachodzą na tydzień (do tła słupków).
+function weekPeriods(periods, week) {
+  const { start, end } = weekRange(week);
+  return periods.filter((p) => p.start <= end && (p.end || today()) >= start);
+}
+
+// Słupki tygodniowe (CSS): wartości, podpis co drugi tydzień, tło dla tygodni w okresie (MC-41).
+function barsHtml(series, value, title, fmt = (v) => v, periods = []) {
   const max = Math.max(1, ...series.map(value));
   return `<div class="bars" role="img" aria-label="${esc(title)}">
-    ${series.map((w, i) => `<div class="bar" title="T${weekNumber(w.week)}: ${fmt(value(w))}">
+    ${series.map((w, i) => {
+      const ps = weekPeriods(periods, w.week);
+      return `<div class="bar ${ps.length ? 'in-period' : ''}" title="T${weekNumber(w.week)}: ${fmt(value(w))}${ps.length ? ` · ${esc(ps.map((p) => p.name).join(', '))}` : ''}">
       <span style="height:${Math.round((value(w) / max) * 100)}%"></span>
-      <small>${i % 2 === series.length % 2 ? `T${weekNumber(w.week)}` : ''}</small></div>`).join('')}
+      <small>${i % 2 === series.length % 2 ? `T${weekNumber(w.week)}` : ''}</small></div>`;
+    }).join('')}
   </div>`;
+}
+
+// Legenda okresów widocznych w 12 tygodniach.
+function periodsLegend(periods, weeks) {
+  const names = [...new Set(weeks.flatMap((w) => weekPeriods(periods, w.week).map((p) => p.name)))];
+  return names.length ? `<p class="muted legend"><span class="lg-period"></span>okres: ${esc(names.join(', '))}</p>` : '';
 }
 
 function ascentLine(cur, prev, label, kind) {
@@ -133,13 +148,14 @@ export function renderAnalytics(view) {
 
       <section class="card">
         <div class="card-head"><h2>Regularność</h2><span class="muted">12 tygodni</span></div>
-        ${barsHtml(weeks, (w) => w.count, 'Treningi w tygodniu', (v) => `${v} tr.`)}
+        ${barsHtml(weeks, (w) => w.count, 'Treningi w tygodniu', (v) => `${v} tr.`, st.weightPeriods)}
+        ${periodsLegend(st.weightPeriods, weeks)}
         <p class="muted">Seria: <strong>${run}</strong> ${run === 1 ? 'tydzień' : 'tygodni'} z rzędu z treningiem · średnio ${avgPerWeek} treningu na tydzień.</p>
       </section>
 
       <section class="card">
         <div class="card-head"><h2>Obciążenie treningowe</h2><span class="muted">12 tygodni</span></div>
-        ${barsHtml(weeks, (w) => w.load, 'Obciążenie sRPE w tygodniu')}
+        ${barsHtml(weeks, (w) => w.load, 'Obciążenie sRPE w tygodniu', undefined, st.weightPeriods)}
         ${ratio ? `<p>Ostatni tydzień wobec średniej z 4: <strong>${num(ratio.ratio)}</strong>
           <span class="badge ${ratio.zone === 'ok' ? 'ok' : ratio.zone === 'high' ? 'bad' : 'warn'}">${ACWR_LABELS[ratio.zone]}</span></p>`
           : '<p class="muted">Za mało danych z RPE, żeby porównać tygodnie.</p>'}
