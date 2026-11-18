@@ -8,6 +8,7 @@ import { renderAnalytics } from './analytics.js';
 import { renderLibrary } from './library.js';
 import { renderAttempts } from './attempts.js';
 import { renderSettings } from './settings.js';
+import { renderHelp } from './help.js';
 import { pwa } from './ui.js';
 import { RESUME_MAX_MS } from './timer.js';
 
@@ -22,6 +23,7 @@ const routes = {
   biblioteka: { title: 'Biblioteka ćwiczeń', render: renderLibrary, tab: 'plany' },
   proby: { title: 'Próby na ścianie', render: renderAttempts, tab: 'timer' },
   ustawienia: { title: 'Ustawienia', render: renderSettings },
+  pomoc: { title: 'Pomoc', render: renderHelp, tab: 'pomoc' },
 };
 
 const view = document.getElementById('view');

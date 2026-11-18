@@ -55,6 +55,7 @@ app/                  ← cała aplikacja (to wgrywasz na hosting)
   js/import8a.js        ← import przejść z 8a.nu
   js/plans.js           ← plany treningowe
   js/settings.js        ← ustawienia, eksport/import
+  js/help.js            ← pomoc: jak korzystać z aplikacji (ikona ❓)
 server.cjs            ← lokalny serwer do podglądu
 docs/specyfikacja.md  ← specyfikacja funkcjonalna i etapy
 tests/                ← testy obliczeń (npm test)

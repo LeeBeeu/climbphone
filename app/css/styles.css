@@ -673,3 +673,19 @@ details[open] summary { margin-bottom: 8px; }
 /* Okresy na wykresach treningu */
 .bar.in-period { background: color-mix(in srgb, var(--fl) 18%, transparent); border-radius: 4px; }
 .lg-period { width: 14px; height: 10px; background: color-mix(in srgb, var(--fl) 35%, transparent); }
+
+/* Pomoc */
+.top-icons { display: flex; gap: 2px; }
+.help-sec summary { list-style: none; display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 16px; font-weight: 600; padding: 2px 0; }
+.help-sec summary::-webkit-details-marker { display: none; }
+.help-sec summary::after { content: '▸'; margin-left: auto; color: var(--muted); transition: transform .15s; }
+.help-sec[open] summary::after { transform: rotate(90deg); }
+.help-ico { font-size: 20px; width: 26px; text-align: center; }
+.help-body { font-size: 15px; line-height: 1.5; }
+.help-body h3 { margin: 14px 0 4px; }
+.help-body ul, .help-body ol { margin: 4px 0; padding-left: 20px; }
+.help-body li { margin: 4px 0; }
+.help-body p { margin: 6px 0; }
+.help-map td:first-child { white-space: nowrap; font-weight: 600; }
+.help-faq dt { font-weight: 600; margin-top: 10px; }
+.help-faq dd { margin: 2px 0 0; }
