@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2f6b4f" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141917" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Wspólna rodzinna lista rachunków: terminy, zaległości i odhaczanie zapłaconych.">
+  <title>Rachunki</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="hhName">Rachunki</h1>
+    <button class="icon-btn" id="menuBtn" aria-label="Ustawienia i rodzina" hidden>☰</button>
+  </header>
+
+  <main id="main">
+    <!-- Ekran startowy (logowanie / zakładanie listy) -->
+    <section id="gate" class="gate" hidden></section>
+
+    <!-- Lista miesiąca -->
+    <section id="board" hidden>
+      <div class="month">
+        <button class="icon-btn" id="prev" aria-label="Poprzedni miesiąc">‹</button>
+        <button class="month-label" id="monthLabel" aria-label="Wróć do bieżącego miesiąca"></button>
+        <button class="icon-btn" id="next" aria-label="Następny miesiąc">›</button>
+      </div>
+
+      <div class="summary" aria-live="polite">
+        <div><small>Do zapłaty</small><b id="sTotal">0 zł</b></div>
+        <div><small>Zapłacone</small><b id="sPaid">0 zł</b></div>
+        <div><small>Zostało</small><b id="sLeft">0 zł</b></div>
+      </div>
+      <div class="bar" role="progressbar" aria-label="Zapłacone pozycje" id="bar"><i id="progress"></i></div>
+
+      <div id="overdue"></div>
+      <div id="groups"></div>
+    </section>
+  </main>
+
+  <button class="primary fab" id="addBtn" hidden>+ Dodaj płatność</button>
+
+  <!-- Formularz płatności -->
+  <div class="sheet" id="billSheet" hidden>
+    <form id="billForm" class="panel" novalidate>
+      <h2 id="formTitle">Nowa płatność</h2>
+      <label>Nazwa<input id="fName" maxlength="60" placeholder="np. Woda – wodociągi" autocomplete="off"></label>
+      <div class="row">
+        <label>Kwota (zł)<input id="fAmount" inputmode="decimal" placeholder="np. 120,50" autocomplete="off"></label>
+        <label>Dzień płatności<input id="fDay" type="number" min="1" max="31" inputmode="numeric"></label>
+      </div>
+      <div class="row">
+        <label>Powtarza się<select id="fEvery"></select></label>
+        <label>Kategoria<select id="fCat"></select></label>
+      </div>
+      <div class="row">
+        <label>Od miesiąca<input id="fStart" type="month"></label>
+        <label>Do miesiąca <span class="opt">(opcjonalnie)</span><input id="fEnd" type="month"></label>
+      </div>
+      <label>Notatka <span class="opt">(nr konta, jak płacić)</span><input id="fNote" maxlength="200" autocomplete="off"></label>
+      <p class="err" id="fErr" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" class="danger" id="delBtn" hidden>Usuń</button>
+        <span class="spacer"></span>
+        <button type="button" class="ghost" data-close>Anuluj</button>
+        <button type="submit" class="primary" id="saveBtn">Zapisz</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Menu: rodzina, wszystkie płatności, konto -->
+  <div class="sheet" id="menuSheet" hidden>
+    <div class="panel">
+      <div class="panel-head"><h2>Ustawienia</h2><button class="icon-btn" data-close aria-label="Zamknij">✕</button></div>
+
+      <section class="block" id="familyBlock">
+        <h3>Rodzina</h3>
+        <p class="hint">Te osoby widzą listę i mogą odhaczać płatności. Logują się kontem Google z tym adresem.</p>
+        <ul class="members" id="members"></ul>
+        <form id="memberForm" class="inline">
+          <input id="memberEmail" type="email" placeholder="adres Gmail, np. zona@gmail.com" autocomplete="off" aria-label="E-mail domownika">
+          <button class="primary" type="submit">Dodaj</button>
+        </form>
+        <p class="err" id="memberErr" role="alert" hidden></p>
+      </section>
+
+      <section class="block">
+        <h3>Wszystkie płatności</h3>
+        <ul class="all-bills" id="allBills"></ul>
+      </section>
+
+      <section class="block">
+        <h3>Konto</h3>
+        <p class="hint" id="accountInfo"></p>
+        <div class="actions"><button id="signOutBtn">Wyloguj</button></div>
+      </section>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden><span id="toastText"></span><button id="toastAction" hidden></button></div>
+  <div id="updateBar" class="toast" hidden><span>Jest nowa wersja aplikacji.</span><button id="reloadBtn">Odśwież</button></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

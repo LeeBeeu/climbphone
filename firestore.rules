@@ -1,0 +1,48 @@
+rules_version = '2';
+
+// Reguły dostępu do wspólnej listy rachunków.
+// Wklej całość w konsoli Firebase: Firestore Database → Reguły → Opublikuj.
+//
+// Dostęp ma tylko osoba zalogowana kontem Google, której e-mail jest na liście `members`
+// danego domu. Każdy domownik może dopisać kolejną osobę; nikt nie może usunąć właściciela.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+    function isMember(hid) {
+      return signedIn()
+        && myEmail() in get(/databases/$(database)/documents/households/$(hid)).data.members;
+    }
+
+    match /households/{hid} {
+      allow read: if signedIn() && myEmail() in resource.data.members;
+
+      allow create: if signedIn()
+        && request.resource.data.owner == request.auth.uid
+        && request.resource.data.ownerEmail == myEmail()
+        && request.resource.data.members == [myEmail()];
+
+      allow update: if signedIn()
+        && myEmail() in resource.data.members
+        && request.resource.data.owner == resource.data.owner
+        && request.resource.data.ownerEmail == resource.data.ownerEmail
+        && resource.data.ownerEmail in request.resource.data.members
+        && request.resource.data.members.size() <= 20;
+
+      allow delete: if signedIn() && resource.data.owner == request.auth.uid;
+
+      match /bills/{billId} {
+        allow read, write: if isMember(hid);
+      }
+      match /payments/{paymentId} {
+        allow read, write: if isMember(hid);
+      }
+    }
+  }
+}
