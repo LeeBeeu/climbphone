@@ -44,26 +44,33 @@ export const SESSION_TYPES = [
 let formOpen = false;
 let editingId = null;
 let draftEx = []; // ćwiczenia w otwartym formularzu: [{ name, bodyweight, sets: [{ reps, added_kg }] }]
-let pendingType = null; // rodzaj treningu podpowiedziany z biblioteki
+let pendingType = null;  // rodzaj treningu podpowiedziany z biblioteki
+let pendingNotes = '';   // notatka podpowiedziana z biblioteki (np. lista ćwiczeń treningu bez serii)
 
-// Otwiera formularz nowego treningu z ćwiczeniem (np. „Dodaj do dziennika” w bibliotece) – przed przejściem do #/dziennik.
-// Serie z ostatniego wykonania tego ćwiczenia, a gdy go nie było – domyślne z biblioteki.
-export function openJournalWithExercise(exercise, type = null) {
-  const last = lastExercise(getState().sessions, exercise.name);
+// Otwiera formularz nowego treningu z ćwiczeniami (np. „Dodaj do dziennika” w bibliotece) – przed przejściem do #/dziennik.
+// Serie każdego ćwiczenia z ostatniego wykonania, a gdy go nie było – domyślne z biblioteki.
+export function openJournalWith({ exercises = [], type = null, notes = '' } = {}) {
+  const sessions = getState().sessions;
   formOpen = true;
   editingId = null;
   pendingType = type;
-  draftEx = [last
-    ? { name: exercise.name, bodyweight: !!last.exercise.bodyweight, sets: structuredClone(last.exercise.sets) }
-    : structuredClone(exercise)];
+  pendingNotes = notes;
+  draftEx = exercises.map((exercise) => {
+    const last = lastExercise(sessions, exercise.name);
+    return last
+      ? { name: exercise.name, bodyweight: !!last.exercise.bodyweight, sets: structuredClone(last.exercise.sets) }
+      : structuredClone(exercise);
+  });
 }
+
+export const openJournalWithExercise = (exercise, type = null) => openJournalWith({ exercises: [exercise], type });
 
 const byNewest = (a, b) => b.date.localeCompare(a.date) || (b.created || 0) - (a.created || 0);
 const sumMinutes = (list) => list.reduce((t, s) => t + (Number(s.duration) || 0), 0);
 
 function formHtml(s) {
   const types = SESSION_TYPES.includes(s.type) ? SESSION_TYPES : [...SESSION_TYPES, s.type];
-  const catalog = exerciseCatalog(getState().sessions);
+  const catalog = exerciseCatalog(getState().sessions, getState().customExercises);
   return `
     <form class="card" id="form">
       <h2>${editingId ? 'Edytuj trening' : 'Nowy trening'}</h2>
@@ -174,7 +181,7 @@ export function renderJournal(view) {
     const week = sessions.filter((s) => parseDate(s.date) >= weekStart);
     const month = sessions.filter((s) => s.date.startsWith(today().slice(0, 7)));
     const editing = sessions.find((s) => s.id === editingId);
-    const draft = editing || { date: today(), type: pendingType || SESSION_TYPES[0], duration: 90, rpe: null, notes: '' };
+    const draft = editing || { date: today(), type: pendingType || SESSION_TYPES[0], duration: 90, rpe: null, notes: pendingNotes };
 
     view.innerHTML = `
       <div class="stats">
@@ -241,7 +248,7 @@ export function renderJournal(view) {
         if (!name) return;
         bodyweight = confirm('Ćwiczenie z masą ciała (kg to dociążenie, liczymy % masy ciała)?\nAnuluj = ćwiczenie z ciężarem (kg to ciężar sztangi/hantli).');
       } else {
-        bodyweight = exerciseCatalog(getState().sessions).find((x) => exKey(x.name) === exKey(name))?.bodyweight ?? true;
+        bodyweight = exerciseCatalog(getState().sessions, getState().customExercises).find((x) => exKey(x.name) === exKey(name))?.bodyweight ?? true;
       }
       if (draftEx.some((x) => exKey(x.name) === exKey(name))) return toast('To ćwiczenie jest już na liście');
       // Wstępne wypełnienie seriami z ostatniego wykonania tego ćwiczenia.
@@ -292,6 +299,7 @@ export function renderJournal(view) {
     editingId = null;
     draftEx = [];
     pendingType = null;
+    pendingNotes = '';
     render();
   }
 

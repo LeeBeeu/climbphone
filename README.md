@@ -42,7 +42,7 @@ app/                  ← cała aplikacja (to wgrywasz na hosting)
   js/backup.js          ← eksport kopii i przypomnienie (obliczenia: backup-calc.js)
   js/checkin.js         ← tygodniowy check-in (reguły: checkin-calc.js)
   js/analytics.js       ← ekran Analityka (obliczenia: analytics-calc.js)
-  js/library.js         ← biblioteka ćwiczeń (dane: library-data.js, wyszukiwanie: library-calc.js)
+  js/library.js         ← biblioteka: ćwiczenia (wbudowane i własne) oraz treningi (dane: library-data.js, obliczenia: library-calc.js)
   js/store.js           ← zapis danych w localStorage
   js/timer.js           ← timer chwytotablicy
   js/journal.js         ← dziennik treningów

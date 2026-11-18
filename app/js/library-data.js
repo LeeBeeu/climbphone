@@ -417,3 +417,23 @@ export const LIBRARY = [
     how: 'Łatwe bouldery i drogi na płytach: ciężar nad stopami, zaufanie do tarcia, małe kroki.',
     tips: 'Dobra przeciwwaga dla przewieszeń, na których zwykle trenujemy.' },
 ];
+
+// Gotowe treningi (zestawy ćwiczeń z biblioteki, w kolejności wykonania). Własne treningi: state.workouts.
+export const WORKOUTS = [
+  { id: 'w_fingers', name: 'Sesja siły palców', desc: 'Ok. 60 min. Najlepiej po dniu odpoczynku, na świeżo.',
+    items: ['warm_general', 'warm_wrists', 'warm_progressive', 'warm_board', 'maxhang_half', 'pinch_block', 'external_rotation', 'forearm_stretch'] },
+  { id: 'w_power', name: 'Sesja mocy na ścianie', desc: 'Ok. 90 min. Pełne przerwy między próbami – jakość ważniejsza od zmęczenia.',
+    items: ['warm_general', 'warm_progressive', 'limit_bouldering', 'dyno_practice', 'explosive_pullups', 'hanging_leg_raises', 'cooldown'] },
+  { id: 'w_power_end', name: 'Wytrzymałość siłowa', desc: 'Ok. 75 min. Pod koniec ma pompować.',
+    items: ['warm_general', 'warm_easy_climb', 'four_by_four', 'traverse_intervals', 'pushups', 'cooldown'] },
+  { id: 'w_endurance', name: 'Baza wytrzymałościowa', desc: 'Ok. 60–75 min, niska intensywność; dobry dzień regeneracyjny.',
+    items: ['warm_general', 'arc', 'silent_feet', 'straight_arms', 'cooldown'] },
+  { id: 'w_strength', name: 'Siła ogólna i core', desc: 'Ok. 60 min na siłowni lub w domu z drążkiem.',
+    items: ['warm_shoulders_band', 'weighted_pullups', 'lockoffs', 'deadlift', 'front_lever', 'hollow_hold', 'pushups'] },
+  { id: 'w_antagonist', name: 'Antagonisty i prewencja', desc: 'Ok. 20 min, 2–3 razy w tygodniu, np. po wspinaniu.',
+    items: ['pushups', 'external_rotation', 'ytw', 'face_pulls', 'reverse_wrist_curls', 'finger_extensors'] },
+  { id: 'w_mobility', name: 'Mobilność po treningu', desc: 'Ok. 20 min, spokojnie, bez bólu.',
+    items: ['hip_mobility', 'hamstrings', 'shoulder_dislocates', 'forearm_stretch', 'thoracic'] },
+  { id: 'w_technique', name: 'Technika na łatwym terenie', desc: 'Ok. 60 min. Świadoma praca nóg i ciała zamiast siły.',
+    items: ['warm_easy_climb', 'silent_feet', 'straight_arms', 'flagging', 'heel_toe_hooks', 'downclimbing'] },
+];

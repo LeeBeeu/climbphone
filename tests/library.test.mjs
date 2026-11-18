@@ -67,3 +67,41 @@ test('katalog dziennika zawiera ćwiczenia z biblioteki (bez duplikatów)', () =
   assert.ok(cat.some((e) => e.name === 'Wiosłowanie w zwisie (pod drążkiem)'));
   assert.ok(cat.some((e) => e.name === 'Podciąganie'));
 });
+
+test('własne ćwiczenia: walidacja i „Kopiuj jako własne”', async () => {
+  const { validateExercise, copyAsCustom, allExercises, findExercise } = await import('../app/js/library-calc.js');
+  const base = { id: 'own-1', name: 'Zwisy na kamieniu', cat: 'fingers', level: 2, equip: ['board'], kind: 'sets',
+    dose: '3 × 5', how: 'Zwisy na naturalnym chwycie', sets: { sets: 3, reps: 5, bodyweight: true }, custom: true };
+  assert.equal(validateExercise(base, LIBRARY), null);
+  assert.match(validateExercise({ ...base, name: ' ' }), /nazwę/);
+  assert.match(validateExercise({ ...base, name: 'podciaganie' }, LIBRARY), /już jest/, 'nazwa bez względu na polskie znaki');
+  assert.equal(validateExercise({ ...base, name: 'Podciąganie', id: 'pullups' }, LIBRARY), null, 'ta sama pozycja przy edycji');
+  assert.match(validateExercise({ ...base, equip: [] }), /sprzęt/);
+  assert.match(validateExercise({ ...base, sets: { sets: 0, reps: 5 } }), /serii/);
+  assert.match(validateExercise({ ...base, kind: 'timer', timer: { prep: 0, hang: 0, rest: 0, reps: 1, sets: 1, setRest: 0 } }), /timera/);
+  const copy = copyAsCustom(byId('maxhang_half'), 'own-2');
+  assert.equal(copy.name, 'Max zwisy – półzaciąg 10 s (moje)');
+  assert.equal(copy.custom, true);
+  assert.deepEqual(copy.timer, byId('maxhang_half').timer);
+  copy.timer.hang = 7;
+  assert.equal(byId('maxhang_half').timer.hang, 10, 'kopia nie zmienia biblioteki');
+  assert.equal(allExercises([copy]).length, LIBRARY.length + 1);
+  assert.equal(findExercise('own-2', [copy]).name, copy.name);
+});
+
+test('treningi: gotowe zestawy, plan, dziennik, usuwanie ćwiczenia', async () => {
+  const { allWorkouts, workoutExercises, workoutPlanItems, workoutPoolItem, workoutJournal, removeFromWorkouts } =
+    await import('../app/js/library-calc.js');
+  const ids = new Set(LIBRARY.map((e) => e.id));
+  const ws = allWorkouts([]);
+  assert.ok(ws.length >= 6 && ws.every((w) => w.builtin && w.items.length >= 4));
+  assert.ok(ws.every((w) => w.items.every((i) => ids.has(i))), 'gotowe treningi odwołują się do istniejących ćwiczeń');
+  const own = { id: 'wk-1', name: 'Moja sesja', desc: '', items: ['pullups', 'own-x', 'arc'] };
+  assert.deepEqual(workoutExercises(own, LIBRARY).map((e) => e.id), ['pullups', 'arc'], 'brakujące pominięte');
+  assert.deepEqual(workoutPlanItems(own, LIBRARY), ['Podciąganie – 4 × 5–8', 'ARC – ciągłe wspinanie – 2–3 × 20–30 min']);
+  assert.equal(workoutPoolItem(own), 'Trening: Moja sesja');
+  const j = workoutJournal(own, LIBRARY);
+  assert.deepEqual(j.exercises.map((e) => e.name), ['Podciąganie']);
+  assert.equal(j.notes, 'Trening: Moja sesja\n• ARC – ciągłe wspinanie – 2–3 × 20–30 min');
+  assert.deepEqual(removeFromWorkouts([own], 'pullups')[0].items, ['own-x', 'arc']);
+});

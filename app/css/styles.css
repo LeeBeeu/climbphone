@@ -594,3 +594,15 @@ details[open] summary { margin-bottom: 8px; }
 .lvl { color: var(--accent); letter-spacing: 1px; font-size: 11px; }
 .lib-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
 .row-links { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Własne ćwiczenia i treningi */
+.own-tag { display: inline-block; padding: 0 6px; border-radius: 999px; font-size: 10px; font-weight: 700; background: var(--fl); color: #2a2000; vertical-align: middle; }
+.pre { white-space: pre-wrap; }
+.wk-list { margin: 8px 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.wk-list small { display: block; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.wk-edit { margin: 6px 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
+.wk-edit li { display: grid; grid-template-columns: 1fr 32px 32px 32px; gap: 4px; align-items: center; }
+.wk-edit .icon { min-width: 0; width: 32px; padding: 0; }
+.wk-edit .icon:disabled { opacity: .3; }
+.equip-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 8px; }

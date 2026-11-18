@@ -23,10 +23,10 @@ export const EXERCISES = [
 const kgText = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
 
 // Katalog: wbudowane + własne nazwy z dziennika (bez duplikatów, bez względu na wielkość liter).
-export function exerciseCatalog(sessions) {
+export function exerciseCatalog(sessions, custom = []) {
   const map = new Map(EXERCISES.map((e) => [exKey(e.name), { ...e }]));
-  // Ćwiczenia „serie × powtórzenia” z biblioteki (app/js/library-data.js).
-  for (const e of LIBRARY) {
+  // Ćwiczenia „serie × powtórzenia” z biblioteki (app/js/library-data.js) i własne (state.customExercises).
+  for (const e of [...LIBRARY, ...custom]) {
     if (e.kind === 'sets' && !map.has(exKey(e.name))) map.set(exKey(e.name), { name: e.name, bodyweight: e.sets.bodyweight });
   }
   const sorted = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
