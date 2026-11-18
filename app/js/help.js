@@ -24,7 +24,7 @@ const SECTIONS = [
     body: `
       <h3>W aplikacji (2 minuty)</h3>
       <ul>
-        <li><strong>Zaplanuj <a href="#/trening">najbliższy trening</a></strong> (📋 Plany → Najbliższy trening): wybierz dzień i miejsce, dodaj dzień z planu tygodnia, trening z Biblioteki albo własne pozycje. Możesz to zrobić rano albo godzinę wcześniej – w trybie planowania tylko układasz listę (✏️ zmienia dawkę i kolejność) i pakujesz się według listy „Co zabrać”.</li>
+        <li><strong>Zaplanuj <a href="#/trening">najbliższy trening</a></strong> (📋 Plany → Najbliższy trening): wybierz dzień i miejsce, dodaj dzień z planu tygodnia, gotowy trening, kilka ćwiczeń naraz z Biblioteki (📚 Wybierz ćwiczenia) albo własne pozycje. Możesz to zrobić rano albo godzinę wcześniej – w trybie planowania tylko układasz listę (✏️ zmienia dawkę i kolejność) i pakujesz się według listy „Co zabrać”.</li>
         <li>Na chwytotablicy: w <a href="#/timer">⏱️ Timerze</a> wybierz protokół i ustaw obciążenie. Aplikacja podpowie ciężar z poprzedniej sesji i progresję (w górę / bez zmian / w dół).</li>
         <li>Wpisz szerokość listwy (mm). Wyniki z różnych listew nie są porównywalne.</li>
         <li>Na ścianie: przygotuj tryb <a href="#/proby">🧗 Próby na ścianie</a>, żeby liczyć próby i odpoczynki.</li>

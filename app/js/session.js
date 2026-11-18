@@ -3,7 +3,7 @@
 import { getState, update, uid } from './store.js';
 import { esc, toast, today, fmtDate, plural } from './ui.js';
 import { weekKeyOf, effectiveDays } from './plan-calc.js';
-import { allExercises, allWorkouts, CATEGORIES, timerPresetFrom } from './library-calc.js';
+import { allExercises, allWorkouts, CATEGORIES, timerPresetFrom, fold } from './library-calc.js';
 import {
   PLACES, placeLabel, newSession, gearFor, planSources, itemsFromPlan, itemsFromWorkout, itemFromExercise, itemFromText,
   sessionProgress, moveItem, elapsedMinutes, finishSummary, matchPreset,
@@ -85,10 +85,74 @@ export function sessionCardHtml() {
 }
 
 let openItem = null; // pozycja z rozwiniętymi akcjami
+let picker = null;   // wybór ćwiczeń z biblioteki: { selected: Set(id), q, cat } albo null
+
+// Lista ćwiczeń z polami do zaznaczania; filtrowanie bez przerysowania (żeby nie gubić klawiatury).
+function pickerHtml(ns, exs) {
+  const have = new Set(ns.items.map((i) => i.exId).filter(Boolean));
+  return `
+    <div class="picker">
+      <div class="grid2">
+        <label class="field"><span>Szukaj</span><input type="search" id="pickQ" value="${esc(picker.q)}" placeholder="np. zwisy, core"></label>
+        <label class="field"><span>Kategoria</span>
+          <select id="pickCat"><option value="">Wszystkie</option>${CATEGORIES.map((c) => `<option value="${c.id}" ${c.id === picker.cat ? 'selected' : ''}>${esc(c.label)}</option>`).join('')}</select></label>
+      </div>
+      <div class="pick-list">
+        ${CATEGORIES.map((c) => {
+          const list = exs.filter((e) => e.cat === c.id);
+          return list.length ? `
+          <div class="pick-group" data-cat="${c.id}">
+            <h4>${esc(c.label)}</h4>
+            ${list.map((e) => `
+            <label class="check pick-row" data-hay="${esc(fold(`${e.name} ${e.dose} ${c.label}`))}">
+              <input type="checkbox" data-pick="${esc(e.id)}" ${picker.selected.has(e.id) ? 'checked' : ''} ${have.has(e.id) ? 'disabled' : ''}>
+              <span>${esc(e.name)}${e.custom ? ' <small class="muted">(własne)</small>' : ''}<br>
+                <small class="muted">${have.has(e.id) ? '✓ już na liście' : esc(e.dose)}</small></span>
+            </label>`).join('')}
+          </div>` : '';
+        }).join('')}
+        <p class="muted" id="pickNone" hidden>Nic nie pasuje do wyszukiwania.</p>
+      </div>
+      <div class="pick-bar">
+        <button class="btn ghost" id="pickCancel">Anuluj</button>
+        <button class="btn primary" id="pickAdd" ${picker.selected.size ? '' : 'disabled'}>＋ Dodaj zaznaczone (<span id="pickN">${picker.selected.size}</span>)</button>
+      </div>
+    </div>`;
+}
+
+function bindPicker($, $$) {
+  const filter = () => {
+    const words = fold(picker.q).split(/\s+/).filter(Boolean);
+    let any = false;
+    $$('.pick-group').forEach((g) => {
+      let vis = 0;
+      g.querySelectorAll('.pick-row').forEach((r) => {
+        const ok = (!picker.cat || g.dataset.cat === picker.cat) && words.every((w) => r.dataset.hay.includes(w));
+        r.hidden = !ok;
+        if (ok) vis++;
+      });
+      g.hidden = !vis;
+      if (vis) any = true;
+    });
+    $('#pickNone').hidden = any;
+  };
+  const count = () => {
+    $('#pickN').textContent = picker.selected.size;
+    $('#pickAdd').disabled = !picker.selected.size;
+  };
+  $('#pickQ').addEventListener('input', (ev) => { picker.q = ev.target.value; filter(); });
+  $('#pickCat').addEventListener('change', (ev) => { picker.cat = ev.target.value; filter(); });
+  $$('[data-pick]').forEach((cb) => cb.addEventListener('change', () => {
+    if (cb.checked) picker.selected.add(cb.dataset.pick); else picker.selected.delete(cb.dataset.pick);
+    count();
+  }));
+  filter();
+}
 let gearOpen = null; // null – automatycznie
 
 export function renderSession(view) {
   let timerId = null;
+  picker = null;
 
   function save(fn) { update((s) => { if (s.nextSession) fn(s.nextSession, s); }); render(); }
 
@@ -171,17 +235,15 @@ export function renderSession(view) {
 
       <section class="card">
         <h3>＋ Dodaj</h3>
-        <label class="field"><span>Z planu albo biblioteki</span>
+        ${picker ? pickerHtml(ns, exs) : `
+        <button class="btn primary" id="openPicker">📚 Wybierz ćwiczenia z biblioteki</button>
+        <label class="field"><span>Cały dzień z planu albo gotowy trening</span>
           <select id="addSrc">
             <option value="">– wybierz –</option>
             ${sources.length ? `<optgroup label="Plan tygodnia ${week.split('-W')[1]}">${sources.map((x) => `<option value="plan:${esc(x.value)}">${esc(x.label)} (${x.count})</option>`).join('')}</optgroup>` : ''}
             <optgroup label="Treningi z biblioteki">${workouts.map((w) => `<option value="wk:${esc(w.id)}">${esc(w.name)}</option>`).join('')}</optgroup>
-            ${CATEGORIES.map((c) => {
-              const list = exs.filter((e) => e.cat === c.id);
-              return list.length ? `<optgroup label="${esc(c.label)}">${list.map((e) => `<option value="ex:${esc(e.id)}">${esc(e.name)}</option>`).join('')}</optgroup>` : '';
-            }).join('')}
           </select></label>
-        <button class="btn" id="addSel">＋ Dodaj wybrane</button>
+        <button class="btn" id="addSel">＋ Dodaj</button>`}
         <form class="add-row" id="addForm"><input id="addText" maxlength="120" placeholder="Własna pozycja, np. 3 drogi 6b na rozgrzewkę"><button class="btn small">＋</button></form>
       </section>
 
@@ -325,8 +387,28 @@ export function renderSession(view) {
       save((n) => { n.items = n.items.filter((i) => i.id !== b.dataset.rm); });
     }));
 
+    // Wybór wielu ćwiczeń naraz
+    $('#openPicker')?.addEventListener('click', () => { picker = { selected: new Set(), q: '', cat: '' }; render(); $('#pickQ')?.focus(); });
+    if (picker) {
+      bindPicker($, $$);
+      $('#pickCancel').addEventListener('click', () => { picker = null; render(); });
+      $('#pickAdd').addEventListener('click', () => {
+        const ids = picker.selected;
+        let added = 0;
+        save((n, s) => {
+          // Kolejność jak w bibliotece; pomijamy to, co już jest na liście.
+          const have = new Set(n.items.map((i) => i.exId).filter(Boolean));
+          const list = allExercises(s.customExercises).filter((e) => ids.has(e.id) && !have.has(e.id)).map((e) => itemFromExercise(e, uid));
+          n.items.push(...list);
+          added = list.length;
+          picker = null;
+        });
+        toast(`Dodano ${added} ${plural(added, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')}`);
+      });
+    }
+
     // Dodawanie
-    $('#addSel').addEventListener('click', () => {
+    $('#addSel')?.addEventListener('click', () => {
       const val = $('#addSrc').value;
       if (!val) return toast('Wybierz, co dodać');
       const [kind, ...rest] = val.split(':');

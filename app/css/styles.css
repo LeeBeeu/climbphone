@@ -711,3 +711,11 @@ details[open] summary { margin-bottom: 8px; }
 .ns-num { flex: none; width: 24px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .ns-text { flex: 1; min-width: 0; overflow-wrap: anywhere; padding: 10px 0; }
 .btn[disabled] { opacity: .5; }
+.picker { display: flex; flex-direction: column; gap: 8px; }
+.pick-list { max-height: 55vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 0 10px; }
+.pick-group h4 { position: sticky; top: 0; margin: 0; padding: 8px 0 4px; background: var(--surface); font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.pick-row small { font-size: 12px; }
+.pick-row[hidden], .pick-group[hidden] { display: none; }
+.pick-bar { display: flex; gap: 8px; }
+.pick-bar .btn { flex: 1; }
+.pick-bar .btn.primary { flex: 2; }
