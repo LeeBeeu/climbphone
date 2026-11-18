@@ -708,3 +708,6 @@ details[open] summary { margin-bottom: 8px; }
 .card-sum::-webkit-details-marker { display: none; }
 .danger-text { color: var(--danger); }
 .next-card a.btn { text-decoration: none; }
+.ns-num { flex: none; width: 24px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ns-text { flex: 1; min-width: 0; overflow-wrap: anywhere; padding: 10px 0; }
+.btn[disabled] { opacity: .5; }

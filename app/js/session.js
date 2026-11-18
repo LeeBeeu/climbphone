@@ -1,7 +1,7 @@
 // Ekran „Najbliższy trening”: checklista na konkretny dzień – plan przed treningiem, odhaczanie i zmiany w trakcie,
 // na końcu wpis do dziennika. Logika w session-calc.js.
 import { getState, update, uid } from './store.js';
-import { esc, toast, today, fmtDate } from './ui.js';
+import { esc, toast, today, fmtDate, plural } from './ui.js';
 import { weekKeyOf, effectiveDays } from './plan-calc.js';
 import { allExercises, allWorkouts, CATEGORIES, timerPresetFrom } from './library-calc.js';
 import {
@@ -22,6 +22,8 @@ export function dayLabel(date) {
   if (date === shiftDay(t, -1)) return 'wczoraj';
   return fmtDate(date);
 }
+
+export const whenLabel = (ns) => `${dayLabel(ns.date)}${ns.time ? `, ${ns.time}` : ''}`;
 
 // Protokół timera dla ćwiczenia (jak „Uruchom w timerze” w bibliotece) i przejście do timera.
 export function startTimerFor(e) {
@@ -73,10 +75,12 @@ export function sessionCardHtml() {
     </section>`;
   }
   const pr = sessionProgress(ns);
+  const n = ns.items.length;
   return `<a class="card next-card link-card" href="#/trening">
-    <div class="card-head"><h2>Najbliższy trening</h2><span class="muted">${pr.done}/${pr.total}</span></div>
-    <p><strong>${esc(ns.title || placeLabel(ns.place))}</strong> · ${esc(dayLabel(ns.date))}${ns.startedAt ? ' · <span class="up">w trakcie</span>' : ''}</p>
-    <div class="meter"><div style="width:${pr.pct}%"></div></div>
+    <div class="card-head"><h2>Najbliższy trening</h2><span class="muted">${ns.startedAt ? `${pr.done}/${pr.total}` : 'zaplanowany'}</span></div>
+    <p><strong>${esc(ns.title || placeLabel(ns.place))}</strong> · ${esc(whenLabel(ns))}
+      ${ns.startedAt ? ' · <span class="up">w trakcie</span>' : ` · ${n} ${plural(n, 'ćwiczenie', 'ćwiczenia', 'ćwiczeń')}`}</p>
+    ${ns.startedAt ? `<div class="meter"><div style="width:${pr.pct}%"></div></div>` : ''}
   </a>`;
 }
 
@@ -104,22 +108,27 @@ export function renderSession(view) {
     const sources = planSources(st.plans, week);
     const workouts = allWorkouts(st.workouts);
     const gearDone = ns.gear.filter((g) => g.done).length;
-    const showGear = gearOpen ?? (!ns.startedAt && gearDone < ns.gear.length);
+    const live = !!ns.startedAt; // planowanie (lista do ułożenia) albo trening w toku (checklista)
+    const showGear = gearOpen ?? (!live && gearDone < ns.gear.length);
     const started = ns.startedAt ? new Date(ns.startedAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '';
 
     view.innerHTML = `
+      ${live ? `
       <section class="card">
-        <div class="card-head"><h2>Trening ${esc(dayLabel(ns.date))}</h2><span class="muted">${pr.done}/${pr.total}</span></div>
+        <div class="card-head"><h2>${esc(ns.title || `Trening ${dayLabel(ns.date)}`)}</h2><span class="muted">${pr.done}/${pr.total}</span></div>
+        <div class="meter"><div style="width:${pr.pct}%"></div></div>
+        <p class="muted">Zrobione ${pr.done} z ${pr.total}${pr.skipped ? `, pominięte ${pr.skipped}` : ''}. W trakcie od ${started} (<span id="elapsed">${elapsedMinutes(ns)}</span> min).</p>
+      </section>` : `
+      <section class="card">
+        <div class="card-head"><h2>Plan treningu ${esc(whenLabel(ns))}</h2><span class="muted">${ns.items.length} poz.</span></div>
+        <p class="muted">Ułóż listę i spakuj się. Odhaczanie ćwiczeń zacznie się po ▶ Zaczynam trening.</p>
         <div class="seg" id="place">${PLACES.map((p) => `<button type="button" data-p="${p.id}" class="${p.id === ns.place ? 'active' : ''}">${p.icon} ${p.label}</button>`).join('')}</div>
         <div class="grid2">
           <label class="field"><span>Data</span><input type="date" id="sdate" value="${ns.date}"></label>
-          <label class="field"><span>Nazwa (opcjonalnie)</span><input id="stitle" maxlength="60" value="${esc(ns.title)}" placeholder="np. Siła palców"></label>
+          <label class="field"><span>Godzina (opcjonalnie)</span><input type="time" id="stime" value="${esc(ns.time || '')}"></label>
         </div>
-        <div class="meter"><div style="width:${pr.pct}%"></div></div>
-        <p class="muted">${pr.total ? `Zrobione ${pr.done} z ${pr.total}${pr.skipped ? `, pominięte ${pr.skipped}` : ''}.` : 'Dodaj ćwiczenia poniżej.'}
-          ${ns.startedAt ? ` W trakcie od ${started} (<span id="elapsed">${elapsedMinutes(ns)}</span> min).` : ''}</p>
-        ${ns.startedAt ? '' : '<button class="btn primary big" id="startS">▶ Zaczynam trening</button>'}
-      </section>
+        <label class="field"><span>Nazwa (opcjonalnie)</span><input id="stitle" maxlength="60" value="${esc(ns.title)}" placeholder="np. Siła palców"></label>
+      </section>`}
 
       <details class="card" id="gearBox" ${showGear ? 'open' : ''}>
         <summary class="card-sum"><strong>🎒 Co zabrać</strong> <span class="muted">${gearDone}/${ns.gear.length}</span></summary>
@@ -132,18 +141,19 @@ export function renderSession(view) {
       </details>
 
       <section class="card">
-        <h3>📋 Plan treningu</h3>
+        <h3>${live ? '✅ Checklista' : '📋 Ćwiczenia'}</h3>
         ${ns.items.length ? '' : '<p class="muted">Pusto. Dodaj dzień z planu tygodnia, trening z biblioteki albo własną pozycję.</p>'}
         ${ns.items.map((it, idx) => {
           const open = openItem === it.id;
           return `
           <div class="ns-item ${it.skipped ? 'skipped' : ''}">
             <div class="ns-row">
-              <label class="check ${it.done ? 'done' : ''}">
+              ${live ? `<label class="check ${it.done ? 'done' : ''}">
                 <input type="checkbox" data-done="${it.id}" ${it.done ? 'checked' : ''} ${it.skipped ? 'disabled' : ''}>
-                <span>${esc(it.text)}${it.skipped ? ' <small class="muted">(pominięte)</small>' : ''}</span></label>
-              ${timerOf(it) && !it.skipped ? `<button class="icon" data-timer="${it.id}" aria-label="Uruchom w timerze">⏱</button>` : ''}
-              <button class="icon" data-more="${it.id}" aria-label="Zmień" aria-expanded="${open}">⋯</button>
+                <span>${esc(it.text)}${it.skipped ? ' <small class="muted">(pominięte)</small>' : ''}</span></label>`
+              : `<span class="ns-num">${idx + 1}.</span><span class="ns-text">${esc(it.text)}</span>`}
+              ${live && timerOf(it) && !it.skipped ? `<button class="icon" data-timer="${it.id}" aria-label="Uruchom w timerze">⏱</button>` : ''}
+              <button class="icon" data-more="${it.id}" aria-label="Zmień" aria-expanded="${open}">${live ? '⋯' : '✏️'}</button>
             </div>
             ${open ? `
             <div class="ns-edit">
@@ -151,7 +161,7 @@ export function renderSession(view) {
               <div class="row-links">
                 <button class="btn ghost small" data-mv="${idx}|-1" ${idx === 0 ? 'disabled' : ''}>↑</button>
                 <button class="btn ghost small" data-mv="${idx}|1" ${idx === ns.items.length - 1 ? 'disabled' : ''}>↓</button>
-                <button class="btn ghost small" data-skip="${it.id}">${it.skipped ? '↺ Przywróć' : '⏭ Pomiń'}</button>
+                ${live ? `<button class="btn ghost small" data-skip="${it.id}">${it.skipped ? '↺ Przywróć' : '⏭ Pomiń'}</button>` : ''}
                 <button class="btn ghost small danger-text" data-rm="${it.id}">🗑 Usuń</button>
               </div>
             </div>` : ''}
@@ -175,10 +185,14 @@ export function renderSession(view) {
         <form class="add-row" id="addForm"><input id="addText" maxlength="120" placeholder="Własna pozycja, np. 3 drogi 6b na rozgrzewkę"><button class="btn small">＋</button></form>
       </section>
 
-      <button class="btn primary big" id="finish">✓ Zakończ i zapisz w dzienniku</button>
+      ${live
+        ? '<button class="btn primary big" id="finish">✓ Zakończ i zapisz w dzienniku</button>'
+        : `<button class="btn primary big" id="startS" ${ns.items.length ? '' : 'disabled'}>▶ Zaczynam trening</button>
+           <p class="muted">Plan jest zapisany – wrócisz do niego w każdej chwili z ekranu Plany.</p>`}
       <div class="row">
         <button class="btn ghost" id="toPlans">← Plany</button>
-        <button class="btn danger" id="delS">🗑️ Usuń trening</button>
+        ${live ? '<button class="btn ghost" id="unstart">✏️ Planowanie</button>' : ''}
+        <button class="btn danger" id="delS">🗑️ Usuń</button>
       </div>`;
 
     bind(ns, timerOf);
@@ -200,9 +214,13 @@ export function renderSession(view) {
           W trakcie odhaczasz, pomijasz, zmieniasz dawki i dopisujesz, a na końcu wszystko trafia do dziennika.</p>
         <form id="newForm">
           <div class="seg" id="place">${PLACES.map((p, i) => `<button type="button" data-p="${p.id}" class="${i === 0 ? 'active' : ''}">${p.icon} ${p.label}</button>`).join('')}</div>
-          <label class="field"><span>Kiedy</span>
-            <select id="ndate"><option value="${t}">Dziś</option><option value="${shiftDay(t, 1)}">Jutro</option><option value="${shiftDay(t, 2)}">Pojutrze</option></select></label>
+          <div class="grid2">
+            <label class="field"><span>Kiedy</span>
+              <select id="ndate"><option value="${t}">Dziś</option><option value="${shiftDay(t, 1)}">Jutro</option><option value="${shiftDay(t, 2)}">Pojutrze</option></select></label>
+            <label class="field"><span>Godzina (opcjonalnie)</span><input type="time" id="ntime"></label>
+          </div>
           <button class="btn primary big">＋ Zaplanuj trening</button>
+          <p class="muted">Najpierw układasz listę – odhaczanie zaczyna się dopiero po „Zaczynam trening”.</p>
         </form>
       </section>
       <button class="btn ghost" id="toPlans">← Plany</button>`;
@@ -214,7 +232,8 @@ export function renderSession(view) {
     view.querySelector('#newForm').addEventListener('submit', (ev) => {
       ev.preventDefault();
       const date = view.querySelector('#ndate').value;
-      update((s) => { s.nextSession = newSession({ id: uid(), date, place, lastGear: s.settings.gear_last, idFn: uid }); });
+      const time = view.querySelector('#ntime').value || '';
+      update((s) => { s.nextSession = { ...newSession({ id: uid(), date, place, lastGear: s.settings.gear_last, idFn: uid }), time }; });
       gearOpen = null;
       render();
     });
@@ -232,9 +251,17 @@ export function renderSession(view) {
       // Lista rzeczy dla nowego miejsca – o ile nic jeszcze nie odhaczono.
       if (!n.gear.some((g) => g.done)) n.gear = gearFor(n.place, s.settings.gear_last, uid);
     })));
-    $('#sdate').addEventListener('change', (ev) => { if (ev.target.value) save((n) => { n.date = ev.target.value; }); });
-    $('#stitle').addEventListener('change', (ev) => save((n) => { n.title = ev.target.value.trim(); }));
-    $('#startS')?.addEventListener('click', () => { gearOpen = false; save((n) => { n.startedAt = Date.now(); }); });
+    $('#sdate')?.addEventListener('change', (ev) => { if (ev.target.value) save((n) => { n.date = ev.target.value; }); });
+    $('#stime')?.addEventListener('change', (ev) => save((n) => { n.time = ev.target.value || ''; }));
+    $('#stitle')?.addEventListener('change', (ev) => save((n) => { n.title = ev.target.value.trim(); }));
+    $('#startS')?.addEventListener('click', () => {
+      gearOpen = false;
+      openItem = null;
+      save((n) => { n.startedAt = Date.now(); });
+      window.scrollTo(0, 0);
+    });
+    // Powrót do planowania (np. „Zaczynam” dotknięte za wcześnie) – odhaczenia zostają.
+    $('#unstart')?.addEventListener('click', () => { openItem = null; save((n) => { delete n.startedAt; }); });
 
     // Co zabrać – zmiany listy zapamiętujemy jako domyślne dla miejsca.
     const rememberGear = (n, s) => { (s.settings.gear_last ||= {})[n.place] = n.gear.map((g) => g.text); };
@@ -335,7 +362,7 @@ export function renderSession(view) {
       view.querySelector('#addText')?.focus();
     });
 
-    $('#finish').addEventListener('click', () => {
+    $('#finish')?.addEventListener('click', () => {
       const cur = getState().nextSession;
       const pr = sessionProgress(cur);
       if (!pr.done && !confirm('Nic nie jest odhaczone. Zakończyć i otworzyć wpis w dzienniku mimo to?')) return;

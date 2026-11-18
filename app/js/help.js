@@ -24,7 +24,7 @@ const SECTIONS = [
     body: `
       <h3>W aplikacji (2 minuty)</h3>
       <ul>
-        <li><strong>Zaplanuj <a href="#/trening">najbliższy trening</a></strong> (📋 Plany → Najbliższy trening): wybierz dzień i miejsce, dodaj dzień z planu tygodnia, trening z Biblioteki albo własne pozycje. Powstaje checklista z listą rzeczy do zabrania.</li>
+        <li><strong>Zaplanuj <a href="#/trening">najbliższy trening</a></strong> (📋 Plany → Najbliższy trening): wybierz dzień i miejsce, dodaj dzień z planu tygodnia, trening z Biblioteki albo własne pozycje. Możesz to zrobić rano albo godzinę wcześniej – w trybie planowania tylko układasz listę (✏️ zmienia dawkę i kolejność) i pakujesz się według listy „Co zabrać”.</li>
         <li>Na chwytotablicy: w <a href="#/timer">⏱️ Timerze</a> wybierz protokół i ustaw obciążenie. Aplikacja podpowie ciężar z poprzedniej sesji i progresję (w górę / bez zmian / w dół).</li>
         <li>Wpisz szerokość listwy (mm). Wyniki z różnych listew nie są porównywalne.</li>
         <li>Na ścianie: przygotuj tryb <a href="#/proby">🧗 Próby na ścianie</a>, żeby liczyć próby i odpoczynki.</li>
@@ -46,7 +46,7 @@ const SECTIONS = [
     id: 'during', icon: '💪', title: 'W trakcie treningu',
     body: `
       <ul>
-        <li>Dotknij <strong>▶ Zaczynam trening</strong> i odhaczaj pozycje na liście. Pod ⋯ zmienisz dawkę, kolejność, pominiesz albo usuniesz pozycję; na dole dopiszesz nową. Ćwiczenia z chwytotablicy mają przycisk ⏱ – otwierają od razu właściwy protokół.</li>
+        <li>Na miejscu dotknij <strong>▶ Zaczynam trening</strong> – lista zamienia się w checklistę. Odhaczaj pozycje na liście. Pod ⋯ zmienisz dawkę, kolejność, pominiesz albo usuniesz pozycję; na dole dopiszesz nową. Ćwiczenia z chwytotablicy mają przycisk ⏱ – otwierają od razu właściwy protokół.</li>
         <li><strong>Timer</strong> prowadzi przez zwisy i przerwy sygnałami. Po każdej serii możesz zapisać powtórzenia i wysiłek 1–5 (5 = na granicy).</li>
         <li>Musisz przerwać? Wyjdź spokojnie. Po powrocie (do 3 h) zobaczysz <strong>▶ Wznów</strong>.</li>
         <li>Zmieniłeś coś w trakcie (mniej serii, inny ciężar)? Użyj <strong>Dopasuj</strong> w podsumowaniu, żeby zapis zgadzał się z tym, co zrobiłeś.</li>
