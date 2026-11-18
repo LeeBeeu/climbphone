@@ -70,11 +70,11 @@ const clearDraft = () => { try { localStorage.removeItem(DRAFT_KEY); } catch { /
 
 // Otwiera formularz nowego treningu z ćwiczeniami (np. „Dodaj do dziennika” w bibliotece) – przed przejściem do #/dziennik.
 // Serie każdego ćwiczenia z ostatniego wykonania, a gdy go nie było – domyślne z biblioteki.
-export function openJournalWith({ exercises = [], type = null, notes = '' } = {}) {
+export function openJournalWith({ exercises = [], type = null, notes = '', fields = null } = {}) {
   const sessions = getState().sessions;
   formOpen = true;
   editingId = null;
-  draftFields = null;
+  draftFields = fields; // np. data i czas z „Najbliższego treningu”
   pendingType = type;
   pendingNotes = notes;
   draftEx = exercises.map((exercise) => {

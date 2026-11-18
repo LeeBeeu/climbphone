@@ -4,13 +4,13 @@
 import { getState, update, uid } from './store.js';
 import { esc, toast } from './ui.js';
 import {
-  CATEGORIES, EQUIPMENT, KINDS, filterLibrary, catLabel, planItemText, timerPresetFrom, journalExerciseFrom, countByCat,
+  CATEGORIES, EQUIPMENT, KINDS, filterLibrary, catLabel, planItemText, timerPresetFrom, journalExerciseFrom, countByCat, journalType,
   allExercises, findExercise, validateExercise, copyAsCustom, allWorkouts, workoutExercises, workoutPlanItems,
   workoutPoolItem, workoutJournal, removeFromWorkouts, parseScheme, TYPES, GOALS, exType, exGoals, typeLabel, goalLabel,
 } from './library-calc.js';
 import { LEVELS } from './library-data.js';
-import { selectTimerPreset } from './timer.js';
 import { openJournalWith } from './journal.js';
+import { addToNextSession, startTimerFor, dayLabel } from './session.js';
 
 const filters = { q: '', cat: '', equip: '', level: 0, type: '', goal: '' };
 let mode = 'exercises';  // 'exercises' | 'workouts'
@@ -26,15 +26,7 @@ const custom = () => getState().customExercises;
 const all = () => allExercises(custom());
 
 // Rodzaj treningu w dzienniku dla ćwiczenia z biblioteki.
-function sessionType(e) {
-  if (!e) return null;
-  if (e.cat === 'fingers') return 'Chwytotablica';
-  if (e.equip.includes('campus')) return 'Kampus';
-  if (e.cat === 'mobility') return 'Mobilność / rozciąganie';
-  if (['strength', 'core', 'antagonist', 'warmup'].includes(e.cat)) return 'Siła / ogólnorozwojówka';
-  if (e.cat === 'endurance') return 'Wytrzymałość / ARC';
-  return null;
-}
+const sessionType = journalType;
 
 function planOptions(plans) {
   return [...plans.map((p) => `<option value="${p.id}" ${p.id === lastPlanId ? 'selected' : ''}>${esc(p.name)}</option>`),
@@ -78,6 +70,18 @@ function addToPlan(planVal, target, poolText, dayTexts) {
     }
   });
   return { name, added };
+}
+
+// Przycisk „Do najbliższego treningu” (checklista na ekranie #/trening).
+function nextBtnHtml() {
+  const ns = getState().nextSession;
+  return `<button class="btn big" id="toNext">＋ Do najbliższego treningu${ns ? ` <small class="muted">(${esc(dayLabel(ns.date))})</small>` : ''}</button>`;
+}
+function bindNextBtn(kind, obj) {
+  document.getElementById('toNext')?.addEventListener('click', () => {
+    const added = addToNextSession(kind, obj);
+    toast(added ? 'Dodano do najbliższego treningu' : 'Już jest w najbliższym treningu');
+  });
 }
 
 export function renderLibrary(view) {
@@ -222,6 +226,7 @@ export function renderLibrary(view) {
       </section>
       ${e.kind === 'timer' ? '<button class="btn primary big" id="toTimer">▶ Uruchom w timerze</button>' : ''}
       ${e.kind === 'sets' ? '<button class="btn primary big" id="toJournal">📓 Dodaj do dziennika</button>' : ''}
+      ${nextBtnHtml()}
       ${planCardHtml(`Pozycja: „${esc(planItemText(e))}”. Trafi do szablonu planu (wszystkie tygodnie).`)}
       <section class="card">
         <h2>Dodaj do treningu</h2>
@@ -254,16 +259,8 @@ export function renderLibrary(view) {
       openId = null;
       go();
     });
-    view.querySelector('#toTimer')?.addEventListener('click', () => {
-      const preset = timerPresetFrom(e);
-      update((s) => {
-        const i = s.timerPresets.findIndex((p) => p.id === preset.id);
-        if (i < 0) s.timerPresets.push(preset);
-        else if (e.custom) s.timerPresets[i] = { ...s.timerPresets[i], ...e.timer, name: e.name }; // własne: czasy po edycji
-      });
-      selectTimerPreset(preset.id);
-      location.hash = '#/timer';
-    });
+    view.querySelector('#toTimer')?.addEventListener('click', () => startTimerFor(e));
+    bindNextBtn('exercise', e);
     view.querySelector('#toJournal')?.addEventListener('click', () => {
       openJournalWith({ exercises: [journalExerciseFrom(e)], type: sessionType(e) });
       location.hash = '#/dziennik';
@@ -450,6 +447,7 @@ export function renderLibrary(view) {
         </div>
       </section>
       <button class="btn primary big" id="wkJournal">📓 Dodaj do dziennika</button>
+      ${nextBtnHtml()}
       ${planCardHtml(`Do dnia: każde ćwiczenie osobną pozycją (${ex.length}). Do puli: jedna pozycja „${esc(workoutPoolItem(w))}”.`)}`;
 
     view.querySelector('#wback').addEventListener('click', () => { openWorkout = null; go(); });
@@ -460,6 +458,7 @@ export function renderLibrary(view) {
       go();
     }));
     bindPlanCard((planVal, target) => addToPlan(planVal, target, workoutPoolItem(w), workoutPlanItems(w, all())));
+    bindNextBtn('workout', w);
     view.querySelector('#wkJournal').addEventListener('click', () => {
       const j = workoutJournal(w, all());
       // Rodzaj według głównej części treningu (bez rozgrzewki i mobilności).

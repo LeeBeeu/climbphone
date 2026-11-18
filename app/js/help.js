@@ -24,7 +24,7 @@ const SECTIONS = [
     body: `
       <h3>W aplikacji (2 minuty)</h3>
       <ul>
-        <li>Otwórz <a href="#/plany">📋 Plany</a> i sprawdź, co jest na dziś albo co zostało w puli tygodnia.</li>
+        <li><strong>Zaplanuj <a href="#/trening">najbliższy trening</a></strong> (📋 Plany → Najbliższy trening): wybierz dzień i miejsce, dodaj dzień z planu tygodnia, trening z Biblioteki albo własne pozycje. Powstaje checklista z listą rzeczy do zabrania.</li>
         <li>Na chwytotablicy: w <a href="#/timer">⏱️ Timerze</a> wybierz protokół i ustaw obciążenie. Aplikacja podpowie ciężar z poprzedniej sesji i progresję (w górę / bez zmian / w dół).</li>
         <li>Wpisz szerokość listwy (mm). Wyniki z różnych listew nie są porównywalne.</li>
         <li>Na ścianie: przygotuj tryb <a href="#/proby">🧗 Próby na ścianie</a>, żeby liczyć próby i odpoczynki.</li>
@@ -46,6 +46,7 @@ const SECTIONS = [
     id: 'during', icon: '💪', title: 'W trakcie treningu',
     body: `
       <ul>
+        <li>Dotknij <strong>▶ Zaczynam trening</strong> i odhaczaj pozycje na liście. Pod ⋯ zmienisz dawkę, kolejność, pominiesz albo usuniesz pozycję; na dole dopiszesz nową. Ćwiczenia z chwytotablicy mają przycisk ⏱ – otwierają od razu właściwy protokół.</li>
         <li><strong>Timer</strong> prowadzi przez zwisy i przerwy sygnałami. Po każdej serii możesz zapisać powtórzenia i wysiłek 1–5 (5 = na granicy).</li>
         <li>Musisz przerwać? Wyjdź spokojnie. Po powrocie (do 3 h) zobaczysz <strong>▶ Wznów</strong>.</li>
         <li>Zmieniłeś coś w trakcie (mniej serii, inny ciężar)? Użyj <strong>Dopasuj</strong> w podsumowaniu, żeby zapis zgadzał się z tym, co zrobiłeś.</li>
@@ -57,10 +58,10 @@ const SECTIONS = [
     id: 'after', icon: '📝', title: 'Po treningu',
     body: `
       <ul>
-        <li><strong>Zapisz w dzienniku</strong>: czas trwania i RPE (jak ciężko było, 1–10). Z tego liczy się obciążenie treningowe.</li>
+        <li>Na liście treningu dotknij <strong>✓ Zakończ i zapisz w dzienniku</strong>: wpis wypełni się sam (data, czas od „Zaczynam”, zrobione i pominięte pozycje). Pozycje z planu tygodnia odhaczają się automatycznie.</li>
+        <li><strong>Uzupełnij w dzienniku</strong>: czas trwania i RPE (jak ciężko było, 1–10). Z tego liczy się obciążenie treningowe.</li>
         <li>Dodaj krótką notatkę: samopoczucie, palce, co poszło dobrze.</li>
         <li>Przeszedłeś drogę lub boulder? Dodaj w <a href="#/przejscia">🧗 Przejściach</a> (styl: OS, flash, RP). Nieudane podejścia zapisuj ze stylem „Próba (go)” – tak powstaje lista otwartych projektów.</li>
-        <li>Odhacz zrobione pozycje w <a href="#/plany">📋 Planie</a>.</li>
       </ul>
       <p class="muted">Niedokończony wpis w dzienniku zostaje zapamiętany przez dobę – możesz wrócić do niego później.</p>`,
   },
@@ -117,7 +118,7 @@ const SECTIONS = [
         <tr><td>📓 Dziennik</td><td>wszystkie treningi, ćwiczenia z seriami, kalendarz</td></tr>
         <tr><td>📈 Testy</td><td>testy siły i ich wykresy</td></tr>
         <tr><td>🧗 Przejścia</td><td>logbook dróg i boulderów, próby, projekty</td></tr>
-        <tr><td>📋 Plany</td><td>plan tygodnia, pula, fazy, check-in; stąd Biblioteka i Analityka</td></tr>
+        <tr><td>📋 Plany</td><td>najbliższy trening (checklista), plan tygodnia, pula, fazy, check-in; stąd Biblioteka i Analityka</td></tr>
         <tr><td>⚙️ Ustawienia</td><td>profil, skale wycen, import 8a.nu, kopia zapasowa, wersja</td></tr>
       </tbody></table>`,
   },

@@ -10,6 +10,7 @@ const defaults = () => ({
   sessions: [],      // dziennik treningów
   ascents: [],       // przejścia dróg i boulderów (model zgodny z 8a.nu)
   plans: [],         // plany treningowe
+  nextSession: null, // najbliższy trening – checklista (session-calc.js)
   planChecks: {},    // odhaczone ćwiczenia: { "planId|2026-W45": { "0:Ćwiczenie": true } }
   timerPresets: [],  // własne protokoły timera
   customExercises: [], // własne ćwiczenia biblioteki (kształt jak w library-data.js, id „own-…”)

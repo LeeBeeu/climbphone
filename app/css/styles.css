@@ -689,3 +689,22 @@ details[open] summary { margin-bottom: 8px; }
 .help-map td:first-child { white-space: nowrap; font-weight: 600; }
 .help-faq dt { font-weight: 600; margin-top: 10px; }
 .help-faq dd { margin: 2px 0 0; }
+
+/* Najbliższy trening */
+.link-card { display: flex; flex-direction: column; gap: 8px; color: inherit; text-decoration: none; }
+.link-card p { margin: 0; }
+.next-card { border-left: 4px solid var(--accent); }
+.ns-row { display: flex; align-items: center; gap: 4px; }
+.ns-row .check { flex: 1; min-width: 0; }
+.ns-row .check span { overflow-wrap: anywhere; }
+.ns-row .icon { flex: none; width: 40px; height: 40px; font-size: 18px; }
+.ns-item + .ns-item { border-top: 1px solid var(--border); }
+.ns-item.skipped .check span { color: var(--muted); text-decoration: line-through; }
+.ns-edit { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 10px 32px; }
+.ns-edit .row-links { justify-content: flex-start; }
+.add-row { display: flex; gap: 8px; margin-top: 8px; }
+.add-row input { flex: 1; min-width: 0; }
+.card-sum { display: flex; justify-content: space-between; align-items: center; color: var(--text); font-size: 15px; list-style: none; }
+.card-sum::-webkit-details-marker { display: none; }
+.danger-text { color: var(--danger); }
+.next-card a.btn { text-decoration: none; }

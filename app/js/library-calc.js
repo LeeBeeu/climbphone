@@ -49,6 +49,17 @@ export function journalExerciseFrom(e) {
   };
 }
 
+// Rodzaj treningu w dzienniku dla ćwiczenia z biblioteki (null – nie wiadomo).
+export function journalType(e) {
+  if (!e) return null;
+  if (e.cat === 'fingers') return 'Chwytotablica';
+  if (e.equip.includes('campus')) return 'Kampus';
+  if (e.cat === 'mobility') return 'Mobilność / rozciąganie';
+  if (['strength', 'core', 'antagonist', 'warmup'].includes(e.cat)) return 'Siła / ogólnorozwojówka';
+  if (e.cat === 'endurance') return 'Wytrzymałość / ARC';
+  return null;
+}
+
 // „5, 4, 3” → [5, 4, 3]; pusty tekst → null.
 export function parseScheme(text) {
   const parts = String(text || '').split(/[,;\s-]+/).map((x) => x.trim()).filter(Boolean);

@@ -5,6 +5,7 @@ import {
   itemKey, fillBlock, copyPreviousWeek, weekVolume, effectivePool, poolSlots,
 } from './plan-calc.js';
 import { checkinCardHtml, bindCheckin } from './checkin.js';
+import { sessionCardHtml } from './session.js';
 
 const TEMPLATES = [
   {
@@ -107,6 +108,7 @@ export function renderPlans(view) {
     view.innerHTML = `
       <div class="card-head"><p class="muted">Tydzień ${weekNumber(week)} · ${weekLabel(week)}</p>
         <span class="row-links"><a class="btn ghost small" href="#/biblioteka">📚 Biblioteka</a><a class="btn ghost small" href="#/analityka">📊 Analityka</a></span></div>
+      ${sessionCardHtml()}
       ${checkinCardHtml()}
       ${plans.length ? plans.map((p) => {
         const pr = progress(p, week);

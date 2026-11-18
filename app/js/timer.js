@@ -5,7 +5,7 @@ import {
   initSets, sessionHangLoad, fmtSets, progression, EFFORT_LABELS, effortOptions, PROGRESS_STEPS, PROGRESS_STEP_KG,
 } from './load-calc.js';
 
-const BUILTIN = [
+export const BUILTIN = [
   { id: 'b-repeaters', name: 'Repeaters 7/3', prep: 10, hang: 7, rest: 3, reps: 6, sets: 6, setRest: 180 },
   { id: 'b-max', name: 'Max hangs 10 s', prep: 10, hang: 10, rest: 0, reps: 1, sets: 6, setRest: 180 },
   { id: 'b-endurance', name: 'Wytrzymałość 20/10', prep: 10, hang: 20, rest: 10, reps: 6, sets: 3, setRest: 120 },

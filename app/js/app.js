@@ -9,6 +9,8 @@ import { renderLibrary } from './library.js';
 import { renderAttempts } from './attempts.js';
 import { renderSettings } from './settings.js';
 import { renderHelp } from './help.js';
+import { renderSession } from './session.js';
+import { getState } from './store.js';
 import { pwa } from './ui.js';
 import { RESUME_MAX_MS } from './timer.js';
 
@@ -21,6 +23,7 @@ const routes = {
   plany: { title: 'Plany treningowe', render: renderPlans },
   analityka: { title: 'Analityka', render: renderAnalytics, tab: 'plany' },
   biblioteka: { title: 'Biblioteka ćwiczeń', render: renderLibrary, tab: 'plany' },
+  trening: { title: 'Najbliższy trening', render: renderSession, tab: 'plany' },
   proby: { title: 'Próby na ścianie', render: renderAttempts, tab: 'timer' },
   ustawienia: { title: 'Ustawienia', render: renderSettings },
   pomoc: { title: 'Pomoc', render: renderHelp, tab: 'pomoc' },
@@ -56,6 +59,9 @@ function restoreRoute() {
     if (run && Date.now() - run.savedAt < RESUME_MAX_MS) return location.replace('#/timer');
     const att = JSON.parse(localStorage.getItem('climbphone.attempts') || 'null');
     if (att && !att.endedAt && Date.now() - att.savedAt < 6 * 60 * 60 * 1000) return location.replace('#/proby');
+    // Trening w toku (po „Zaczynam”) – checklista od razu po otwarciu, do 12 h.
+    const ns = getState().nextSession;
+    if (ns?.startedAt && Date.now() - ns.startedAt < 12 * 60 * 60 * 1000) return location.replace('#/trening');
     const ui = JSON.parse(localStorage.getItem(UI_KEY) || 'null');
     if (ui && routes[ui.route] && ui.route !== 'waga' && Date.now() - ui.at < RESTORE_MS) location.replace(`#/${ui.route}`);
   } catch { /* brak pamięci – zostajemy na starcie */ }
