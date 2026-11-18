@@ -52,6 +52,15 @@ let selectedId = BUILTIN[0].id;
 let config = { ...LOAD_DEFAULTS, ...BUILTIN[0] };
 let prefilledFor = null; // protokół, dla którego obciążenie wypełniono już z ostatniej sesji
 
+// Wybór protokołu z zewnątrz (np. „Uruchom w timerze” w bibliotece) – przed przejściem do #/timer.
+export function selectTimerPreset(id) {
+  const p = [...BUILTIN, ...getState().timerPresets].find((x) => x.id === id);
+  if (!p) return;
+  selectedId = id;
+  config = { ...LOAD_DEFAULTS, ...p };
+  prefilledFor = null;
+}
+
 function buildPhases(p) {
   const phases = [];
   if (p.prep > 0) phases.push({ type: 'prep', dur: p.prep });
@@ -141,6 +150,7 @@ export function renderTimer(view) {
       </section>
       ${loadCardHtml()}
       <button class="btn primary big" id="start">▶ Start</button>
+      <a class="btn ghost small" href="#/biblioteka" style="align-self:center">📚 Więcej protokołów w bibliotece ćwiczeń</a>
       <p class="muted center">Ekran nie zgaśnie w trakcie treningu. Sygnał dźwiękowy i wibracja oznaczają zmianę fazy.</p>`;
 
     view.querySelector('#preset').addEventListener('change', (e) => {

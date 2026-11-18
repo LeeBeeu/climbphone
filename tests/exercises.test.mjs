@@ -12,7 +12,7 @@ test('katalog: wbudowane + własne z dziennika, bez duplikatów', () => {
   const cat = exerciseCatalog([
     { date: '2026-11-01', exercises: [{ name: 'podciąganie', bodyweight: true, sets: [] }, { name: 'Wiszące unoszenie nóg', bodyweight: true, sets: [] }] },
   ]);
-  assert.equal(cat.length, EXERCISES.length + 1);
+  assert.equal(cat.length, exerciseCatalog([]).length + 1);
   assert.equal(cat.at(-1).name, 'Wiszące unoszenie nóg');
 });
 

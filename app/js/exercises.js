@@ -6,6 +6,7 @@
 //   bodyweight = false → added_kg to ciężar sztangi / hantli w kg
 // Sesja z ćwiczeniem z masą ciała zapisuje body_weight_kg = trend wagi z dnia treningu (MC-50).
 import { exKey, bestExSet, fmtAdded, effortSuffix } from './load-calc.js';
+import { LIBRARY } from './library-data.js';
 
 export { exKey, bestExSet };
 
@@ -24,6 +25,10 @@ const kgText = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
 // Katalog: wbudowane + własne nazwy z dziennika (bez duplikatów, bez względu na wielkość liter).
 export function exerciseCatalog(sessions) {
   const map = new Map(EXERCISES.map((e) => [exKey(e.name), { ...e }]));
+  // Ćwiczenia „serie × powtórzenia” z biblioteki (app/js/library-data.js).
+  for (const e of LIBRARY) {
+    if (e.kind === 'sets' && !map.has(exKey(e.name))) map.set(exKey(e.name), { name: e.name, bodyweight: e.sets.bodyweight });
+  }
   const sorted = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
   for (const s of sorted) {
     for (const ex of s.exercises || []) {

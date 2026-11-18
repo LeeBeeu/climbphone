@@ -44,6 +44,19 @@ export const SESSION_TYPES = [
 let formOpen = false;
 let editingId = null;
 let draftEx = []; // ćwiczenia w otwartym formularzu: [{ name, bodyweight, sets: [{ reps, added_kg }] }]
+let pendingType = null; // rodzaj treningu podpowiedziany z biblioteki
+
+// Otwiera formularz nowego treningu z ćwiczeniem (np. „Dodaj do dziennika” w bibliotece) – przed przejściem do #/dziennik.
+// Serie z ostatniego wykonania tego ćwiczenia, a gdy go nie było – domyślne z biblioteki.
+export function openJournalWithExercise(exercise, type = null) {
+  const last = lastExercise(getState().sessions, exercise.name);
+  formOpen = true;
+  editingId = null;
+  pendingType = type;
+  draftEx = [last
+    ? { name: exercise.name, bodyweight: !!last.exercise.bodyweight, sets: structuredClone(last.exercise.sets) }
+    : structuredClone(exercise)];
+}
 
 const byNewest = (a, b) => b.date.localeCompare(a.date) || (b.created || 0) - (a.created || 0);
 const sumMinutes = (list) => list.reduce((t, s) => t + (Number(s.duration) || 0), 0);
@@ -72,7 +85,8 @@ function formHtml(s) {
           </select>
         </label>
       </div>
-      <h3 class="sub-title">Ćwiczenia <small class="muted">(serie: powtórzenia × kg)</small></h3>
+      <div class="card-head"><h3 class="sub-title">Ćwiczenia <small class="muted">(serie: powtórzenia × kg)</small></h3>
+        <a class="btn ghost small" href="#/biblioteka">📚 Opisy</a></div>
       <div id="exList"></div>
       <label class="field"><span class="sr-only">Dodaj ćwiczenie</span>
         <select id="exPick">
@@ -160,7 +174,7 @@ export function renderJournal(view) {
     const week = sessions.filter((s) => parseDate(s.date) >= weekStart);
     const month = sessions.filter((s) => s.date.startsWith(today().slice(0, 7)));
     const editing = sessions.find((s) => s.id === editingId);
-    const draft = editing || { date: today(), type: SESSION_TYPES[0], duration: 90, rpe: null, notes: '' };
+    const draft = editing || { date: today(), type: pendingType || SESSION_TYPES[0], duration: 90, rpe: null, notes: '' };
 
     view.innerHTML = `
       <div class="stats">
@@ -169,7 +183,7 @@ export function renderJournal(view) {
         <div class="stat"><b>${month.length}</b><span>sesje w tym miesiącu</span></div>
       </div>
       ${formOpen ? formHtml(draft) : '<button class="btn primary big" id="add">+ Nowy trening</button>'}
-      <a class="btn ghost small" href="#/analityka" style="align-self:flex-end">📊 Analityka i obciążenie</a>
+      <span class="row-links" style="align-self:flex-end"><a class="btn ghost small" href="#/biblioteka">📚 Biblioteka ćwiczeń</a><a class="btn ghost small" href="#/analityka">📊 Analityka</a></span>
       ${listHtml([...sessions].sort(byNewest))}`;
 
     view.querySelector('#add')?.addEventListener('click', () => openForm(null));
@@ -277,6 +291,7 @@ export function renderJournal(view) {
     formOpen = false;
     editingId = null;
     draftEx = [];
+    pendingType = null;
     render();
   }
 

@@ -584,3 +584,13 @@ details[open] summary { margin-bottom: 8px; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; }
 .tbl th, .tbl td { padding: 6px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
+
+/* Biblioteka ćwiczeń */
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin: 8px 0; scrollbar-width: thin; }
+.chips button { flex: none; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.chips button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lib-item { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; align-items: center; }
+.lvl { color: var(--accent); letter-spacing: 1px; font-size: 11px; }
+.lib-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+.row-links { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }

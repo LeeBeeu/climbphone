@@ -5,6 +5,7 @@ import { renderAscents } from './ascents.js';
 import { renderPlans } from './plans.js';
 import { renderTests } from './tests.js';
 import { renderAnalytics } from './analytics.js';
+import { renderLibrary } from './library.js';
 import { renderSettings } from './settings.js';
 import { pwa } from './ui.js';
 
@@ -16,6 +17,7 @@ const routes = {
   przejscia: { title: 'Przejścia', render: renderAscents, wide: true },
   plany: { title: 'Plany treningowe', render: renderPlans },
   analityka: { title: 'Analityka', render: renderAnalytics, tab: 'plany' },
+  biblioteka: { title: 'Biblioteka ćwiczeń', render: renderLibrary, tab: 'plany' },
   ustawienia: { title: 'Ustawienia', render: renderSettings },
 };
 
