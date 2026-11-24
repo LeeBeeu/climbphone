@@ -1,11 +1,14 @@
 import { getState, update, uid } from './store.js';
 import { esc, toast, today, parseDate, fmtMinutes } from './ui.js';
 import {
-  PHASES, phaseLabel, weekKeyOf, weekNumber, weekRange, shiftWeek, effectiveDays, hasWeekOverride, planProgress,
+  PHASES, phaseLabel, weekKeyOf, weekNumber, weekRange, shiftWeek, mondayOf, effectiveDays, hasWeekOverride, planProgress,
   itemKey, fillBlock, copyPreviousWeek, weekVolume, effectivePool, poolSlots,
 } from './plan-calc.js';
 import { checkinCardHtml, bindCheckin } from './checkin.js';
 import { sessionCardHtml } from './session.js';
+import { parsePlanText, buildPlan, planSummary } from './plan-import.js';
+import { matchExercise } from './session-calc.js';
+import { allExercises } from './library-calc.js';
 
 const TEMPLATES = [
   {
@@ -66,6 +69,7 @@ let openId = null;
 let draft = null;      // edytowany plan (kopia) z polem scope: 'template' (szablon) albo 'week' (tylko ten tydzień)
 let viewWeek = null;   // oglądany tydzień ("2026-W47"); null = bieżący
 let blockOpen = false; // formularz „Ustaw blok faz”
+let importer = null;   // wklejanie planu z tekstu: { text, start } albo null
 
 const checksKey = (planId, weekKey) => `${planId}|${weekKey}`;
 const findPlan = (id) => getState().plans.find((p) => p.id === id);
@@ -82,11 +86,19 @@ function weekLabel(weekKey) {
   return `${f(start, { day: 'numeric', month: 'short' })} – ${f(end, { day: 'numeric', month: 'short' })}`;
 }
 
+// „· tydzień planu 3 z 13” dla planów z datą startu (np. wklejonych z tekstu).
+function planWeekNo(plan, week) {
+  if (!plan.startWeek || !plan.length) return '';
+  for (let n = 0; n < plan.length; n++) if (shiftWeek(plan.startWeek, n) === week) return ` · tydzień planu ${n + 1} z ${plan.length}`;
+  return '';
+}
+
 const phaseChip = (id) => (id ? `<span class="phase-chip phase-${id}">${esc(phaseLabel(id))}</span>` : '');
 
 export function renderPlans(view) {
   function render() {
-    if (draft) renderEditor();
+    if (importer) renderImport();
+    else if (draft) renderEditor();
     else if (openId && findPlan(openId)) renderPlan(findPlan(openId));
     else {
       openId = null;
@@ -116,11 +128,12 @@ export function renderPlans(view) {
           <button class="card" data-open="${p.id}">
             <div class="card-head"><h2>${esc(p.name)}</h2><span class="muted">${pr.done}/${pr.total}</span></div>
             ${phaseChip(p.weeks?.[week]?.phase)}
-            ${p.desc ? `<p class="muted">${esc(p.desc)}</p>` : ''}
+            ${p.desc ? `<p class="muted">${esc(p.desc.split('\n')[0])}</p>` : ''}
             <div class="meter"><div style="width:${pr.pct}%"></div></div>
           </button>`;
       }).join('') : '<div class="empty">Nie masz jeszcze planów.<br>Zacznij od szablonu albo utwórz własny.</div>'}
       <button class="btn primary big" id="new">+ Nowy plan</button>
+      <button class="btn big" id="importOpen">📋 Wklej plan z tekstu</button>
       <section class="card">
         <h2>Szablony</h2>
         ${TEMPLATES.map((t, i) => `
@@ -135,6 +148,7 @@ export function renderPlans(view) {
       openId = b.dataset.open;
       viewWeek = null;
     })));
+    view.querySelector('#importOpen').addEventListener('click', () => go(() => { importer = { text: '', start: null }; }));
     view.querySelector('#new').addEventListener('click', () => go(() => {
       draft = { scope: 'template', name: '', desc: '', days: [{ name: 'Dzień 1', items: [] }], pool: [] };
     }));
@@ -144,6 +158,101 @@ export function renderPlans(view) {
       toast('Dodano plan z szablonu');
       go(() => { openId = plan.id; viewWeek = null; });
     }));
+  }
+
+  // ---------- Wklejanie planu z tekstu ----------
+
+  function renderImport() {
+    const parsed = importer.text.trim() ? parsePlanText(importer.text) : null;
+    const start = importer.start || parsed?.start || mondayOf(currentWeek());
+    const startWeek = weekKeyOf(start);
+    const sum = parsed ? planSummary(parsed) : null;
+    const ok = parsed && !parsed.errors.length;
+    const exs = allExercises(getState().customExercises);
+    const linked = ok ? (() => {
+      const items = [...parsed.template.days, ...parsed.weeks.flatMap((w) => w.days)].flatMap((d) => d.items);
+      return { all: items.length, lib: items.filter((t) => matchExercise(t, exs)).length };
+    })() : null;
+
+    view.innerHTML = `
+      <button class="btn ghost small" id="impBack" style="align-self:flex-start">← Wszystkie plany</button>
+      <section class="card">
+        <h2>Wklej plan z tekstu</h2>
+        <p class="muted">Skopiuj plan (np. z czatu z Claude) i wklej poniżej albo wczytaj plik .txt. Format opisuje ściągawka niżej.</p>
+        <label class="field"><span>Tekst planu</span>
+          <textarea id="impText" rows="10" placeholder="PLAN: Nazwa&#10;SZABLON&#10;## Pon – siła palców&#10;- Max zwisy – półzaciąg 10 s – 6 × 10 s&#10;…">${esc(importer.text)}</textarea></label>
+        <div class="row">
+          <button class="btn" id="impFileBtn">📄 Wczytaj plik</button>
+          <button class="btn" id="impCheck">🔍 Sprawdź</button>
+        </div>
+        <input type="file" id="impFile" accept=".txt,.md,text/plain" hidden>
+        <label class="field"><span>Tydzień 1 planu zaczyna się</span>
+          <input type="date" id="impStart" value="${start}"></label>
+        <p class="muted">Tydzień 1 = ${weekLabel(startWeek)}${sum?.weeks ? `, koniec planu: ${weekLabel(shiftWeek(startWeek, sum.weeks - 1))}` : ''}.</p>
+      </section>
+      ${parsed ? `
+      <section class="card">
+        <h2>Podgląd</h2>
+        ${parsed.errors.length ? `<div class="hint warn-hint">${parsed.errors.map((e) => `<div>⚠️ ${esc(e)}</div>`).join('')}</div>` : ''}
+        <p><strong>${esc(parsed.name || 'Plan z tekstu')}</strong></p>
+        <ul class="plain-ul">
+          <li>Tydzień wzorcowy: ${sum.templateDays} dni, ${sum.templateItems} pozycji</li>
+          ${sum.weeks ? `<li>Rozpisane tygodnie: ${sum.weeks} (własny plan w ${sum.ownWeeks}, fazy w ${sum.phases} zakresach)</li>` : ''}
+          ${linked ? `<li>Powiązane z Biblioteką: ${linked.lib} z ${linked.all} pozycji (⏱ i serie w dzienniku)</li>` : ''}
+        </ul>
+        ${parsed.weeks.length ? `
+        <table class="tbl"><thead><tr><th>Tydz.</th><th>Daty</th><th>Faza / uwagi</th></tr></thead><tbody>
+          ${parsed.weeks.map((w) => `<tr><td>${w.from}${w.to > w.from ? `–${w.to}` : ''}</td>
+            <td>${weekLabel(shiftWeek(startWeek, w.from - 1)).split(' – ')[0]}${w.to > w.from ? ` – ${weekLabel(shiftWeek(startWeek, w.to - 1)).split(' – ')[1]}` : ''}</td>
+            <td>${w.phase ? `${phaseChip(w.phase)} ` : ''}<small>${esc(w.note.slice(0, 90))}${w.note.length > 90 ? '…' : ''}</small>${w.days.length ? ` <small class="muted">· ${w.days.length} dni</small>` : ''}</td></tr>`).join('')}
+        </tbody></table>` : ''}
+        <button class="btn primary big" id="impSave" ${ok ? '' : 'disabled'}>✓ Utwórz plan</button>
+      </section>` : ''}
+      <details class="card how">
+        <summary>Ściągawka formatu</summary>
+        <pre class="fmt">PLAN: Nazwa planu
+START: 2026-11-23   (dzień w tygodniu 1)
+OPIS:
+dowolne linie – zasady, progresja…
+SZABLON            (tydzień wzorcowy)
+## Pon – siła palców
+- Max zwisy – półzaciąg 10 s – 6 × 10 s
+- Boulderowanie blisko limitu – 40 min
+## Czw – drogi
+- 3 drogi OS
+PULA               (w dowolny dzień tygodnia)
+- 2× Bouldering
+TYDZIEŃ 1 | Odpoczynek | testy
+## Pon – testy
+- Test: max hang 7 s
+TYDZIEŃ 2-4 | Siła | blok 1 (plan z szablonu)
+TYDZIEŃ 5 | Deload | lżej, ~50%</pre>
+        <p>Fazy: ${PHASES.map((p) => p.label).join(', ')}. Pozycja zaczynająca się nazwą ćwiczenia z Biblioteki dostaje ⏱ i serie w dzienniku.</p>
+        <p>Prośba do Claude: „Przepisz ten plan w formacie ClimbPhone:” i wklej ściągawkę powyżej.</p>
+      </details>`;
+
+    const $ = (s) => view.querySelector(s);
+    const sync = () => { importer.text = $('#impText').value; };
+    $('#impBack').addEventListener('click', () => go(() => { importer = null; }));
+    $('#impCheck').addEventListener('click', () => { sync(); render(); });
+    $('#impText').addEventListener('change', sync);
+    // Po wklejeniu od razu podgląd.
+    $('#impText').addEventListener('paste', () => setTimeout(() => { sync(); importer.start = null; render(); }, 0));
+    $('#impStart').addEventListener('change', (ev) => { sync(); importer.start = ev.target.value || null; render(); });
+    $('#impFileBtn').addEventListener('click', () => $('#impFile').click());
+    $('#impFile').addEventListener('change', async () => {
+      const f = $('#impFile').files[0];
+      if (!f) return;
+      importer.text = await f.text();
+      importer.start = null;
+      render();
+    });
+    $('#impSave')?.addEventListener('click', () => {
+      const plan = buildPlan(parsePlanText(importer.text), { id: uid(), startWeek });
+      update((s) => { s.plans.push(plan); });
+      toast(`Dodano plan „${plan.name}”`);
+      go(() => { importer = null; openId = plan.id; viewWeek = null; });
+    });
   }
 
   // ---------- Szczegóły planu: wybrany tydzień ----------
@@ -163,11 +272,13 @@ export function renderPlans(view) {
       <button class="btn ghost small" id="back" style="align-self:flex-start">← Wszystkie plany</button>
       <section class="card">
         <div class="card-head"><h2>${esc(plan.name)}</h2><span class="muted">${pr.done}/${pr.total}</span></div>
-        ${plan.desc ? `<p class="muted">${esc(plan.desc)}</p>` : ''}
+        ${plan.desc ? (plan.desc.includes('\n') || plan.desc.length > 160
+          ? `<details class="how"><summary>Opis i zasady planu</summary><p class="pre">${esc(plan.desc)}</p></details>`
+          : `<p class="muted">${esc(plan.desc)}</p>`) : ''}
         <div class="week-nav">
           <button class="btn small" id="prevW" aria-label="Poprzedni tydzień">‹</button>
           <div><strong>Tydzień ${weekNumber(week)}</strong>${isCurrent ? ' <small class="muted">(bieżący)</small>' : ''}<br>
-            <small class="muted">${weekLabel(week)}</small></div>
+            <small class="muted">${weekLabel(week)}${planWeekNo(plan, week)}</small></div>
           <button class="btn small" id="nextW" aria-label="Następny tydzień">›</button>
         </div>
         ${isCurrent ? '' : '<button class="btn ghost small" id="thisW">Wróć do bieżącego tygodnia</button>'}
@@ -176,6 +287,7 @@ export function renderPlans(view) {
             ${PHASES.map((p) => `<option value="${p.id}" ${p.id === phase ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
           </select>
         </label>
+        ${plan.weeks?.[week]?.note ? `<p class="hint">${esc(plan.weeks[week].note)}</p>` : ''}
         <div class="meter"><div style="width:${pr.pct}%"></div></div>
         ${override
           ? '<p class="hint">Ten tydzień ma własny plan (inny niż szablon). <button class="btn ghost small" id="resetWeek">Przywróć szablon</button></p>'

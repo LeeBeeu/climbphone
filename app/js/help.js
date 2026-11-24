@@ -72,6 +72,7 @@ const SECTIONS = [
       <ul>
         <li>W <a href="#/plany">📋 Planach</a> utwórz plan i wpisz ćwiczenia na konkretne dni albo do <strong>puli tygodnia</strong> (zrobisz, kiedy pasuje).</li>
         <li>Najszybciej: wybierz trening z <a href="#/biblioteka">📚 Biblioteki</a> i dodaj go do planu.</li>
+        <li><strong>📋 Wklej plan z tekstu</strong> (na dole listy planów): plan przygotowany np. w czacie z Claude – z tygodniami, fazami i notatkami. Ściągawka formatu jest na tym ekranie; możesz poprosić Claude, żeby przepisał plan według niej.</li>
         <li><strong>⧉ Kopiuj poprzedni tydzień</strong> – gdy kolejny tydzień ma wyglądać podobnie.</li>
       </ul>
       <h3>Rozsądny tydzień amatora</h3>

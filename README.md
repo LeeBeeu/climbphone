@@ -58,6 +58,7 @@ app/                  ← cała aplikacja (to wgrywasz na hosting)
   js/help.js            ← pomoc: jak korzystać z aplikacji (ikona ❓)
   js/session.js         ← najbliższy trening: checklista do odhaczania w trakcie
   js/session-calc.js    ← logika checklisty (plan → pozycje, podsumowanie do dziennika)
+  js/plan-import.js     ← plan z tekstu (format PLAN/SZABLON/TYDZIEŃ) → plan w aplikacji
 server.cjs            ← lokalny serwer do podglądu
 docs/specyfikacja.md  ← specyfikacja funkcjonalna i etapy
 tests/                ← testy obliczeń (npm test)
