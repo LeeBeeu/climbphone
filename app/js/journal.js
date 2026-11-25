@@ -7,6 +7,7 @@ import { weekKeyOf, shiftWeek } from './plan-calc.js';
 import { fmtAdded, fmtSets, bodyWeightOn, effortOptions } from './load-calc.js';
 import {
   exerciseCatalog, lastExercise, cleanExercises, exPct, fmtExSets, bestExSet, exKey, journalPickerGroups,
+  checklistStatus, performedSessions, cleanItems, isPlanned,
 } from './exercises.js';
 import { findExercise, journalExerciseFrom } from './library-calc.js';
 
@@ -18,12 +19,18 @@ function hangLoadHtml(l) {
 }
 
 // Ćwiczenia poza timerem: „💪 Podciąganie: 2×5 +20 kg, 1×4 +20 kg · 125% MC”.
-function exercisesHtml(s) {
-  return (s.exercises || []).map((ex) => {
-    const best = ex.bodyweight ? bestExSet(ex.sets) : null;
-    const pct = best && s.body_weight_kg ? ` · <strong>${exPct(s.body_weight_kg, best.added_kg)}% MC</strong>` : '';
-    return `<div class="item-sub">💪 ${esc(ex.name)}: ${esc(fmtExSets(ex))}${pct}</div>`;
-  }).join('');
+// Ćwiczenia i pozycje bez serii we wpisie. Gdy coś czeka na odhaczenie (albo trening jest zaplanowany),
+// każda linia ma pole do odhaczenia prosto z listy.
+function exercisesHtml(s, checkable) {
+  const box = (kind, i, done) => (checkable
+    ? `<input type="checkbox" class="jl-check" data-tick="${s.id}|${kind}|${i}" ${done ? 'checked' : ''} aria-label="Zrobione">` : '');
+  const ex = (s.exercises || []).map((x, i) => {
+    const best = x.bodyweight ? bestExSet(x.sets) : null;
+    const pct = best && s.body_weight_kg && x.done !== false ? ` · <strong>${exPct(s.body_weight_kg, best.added_kg)}% MC</strong>` : '';
+    return `<label class="item-sub jl-line ${x.done === false ? 'open' : ''}">${box('ex', i, x.done !== false)}<span>💪 ${esc(x.name)}: ${esc(fmtExSets(x))}${pct}</span></label>`;
+  });
+  const items = (s.items || []).map((x, i) => `<label class="item-sub jl-line ${x.done === false ? 'open' : ''}">${box('it', i, x.done !== false)}<span>${checkable ? '' : (x.done === false ? '○ ' : '✓ ')}${esc(x.text)}</span></label>`);
+  return [...ex, ...items].join('');
 }
 
 const kgText = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
@@ -48,7 +55,8 @@ export const SESSION_TYPES = [
 
 let formOpen = false;
 let editingId = null;
-let draftEx = []; // ćwiczenia w otwartym formularzu: [{ name, bodyweight, sets: [{ reps, added_kg }] }]
+let draftEx = []; // ćwiczenia w otwartym formularzu: [{ name, bodyweight, done, sets: [{ reps, added_kg }] }]
+let draftItems = []; // pozycje bez serii (na ścianie, timer, czas): [{ text, done }]
 let pendingType = null;  // rodzaj treningu podpowiedziany z biblioteki
 let pendingNotes = '';   // notatka podpowiedziana z biblioteki (np. lista ćwiczeń treningu bez serii)
 let draftFields = null;  // pola formularza zapisane w szkicu (data, rodzaj, czas, RPE, notatki)
@@ -71,13 +79,14 @@ const clearDraft = () => { try { localStorage.removeItem(DRAFT_KEY); } catch { /
 
 // Otwiera formularz nowego treningu z ćwiczeniami (np. „Dodaj do dziennika” w bibliotece) – przed przejściem do #/dziennik.
 // Serie każdego ćwiczenia z ostatniego wykonania, a gdy go nie było – domyślne z biblioteki.
-export function openJournalWith({ exercises = [], type = null, notes = '', fields = null } = {}) {
+export function openJournalWith({ exercises = [], type = null, notes = '', fields = null, items = [] } = {}) {
   const sessions = getState().sessions;
   formOpen = true;
   editingId = null;
   draftFields = fields; // np. data i czas z „Najbliższego treningu”
   pendingType = type;
   pendingNotes = notes;
+  draftItems = items.map((x) => ({ text: x.text ?? x, done: x.done ?? true }));
   draftEx = exercises.map((exercise) => {
     const last = lastExercise(sessions, exercise.name);
     return last
@@ -117,7 +126,9 @@ function formHtml(s) {
       </div>
       <div class="card-head"><h3 class="sub-title">Ćwiczenia <small class="muted">(serie: powtórzenia × kg)</small></h3>
         <a class="btn ghost small" href="#/biblioteka">📚 Opisy</a></div>
+      <p class="hint" id="planHint" hidden>📅 Data w przyszłości – trening zaplanowany. Po wykonaniu odhacz ćwiczenia (tu albo prosto na liście), a jeśli treningu nie było – usuń wpis.</p>
       <div id="exList"></div>
+      <div id="itemList"></div>
       <label class="field"><span class="sr-only">Dodaj ćwiczenie</span>
         <select id="exPick">
           <option value="">+ Dodaj ćwiczenie…</option>
@@ -125,6 +136,7 @@ function formHtml(s) {
           <option value="__new">Inne ćwiczenie…</option>
         </select>
       </label>
+      <div class="add-row"><input id="itemText" maxlength="120" placeholder="Pozycja bez serii, np. 3 drogi 6c+ OS"><button type="button" class="btn small" id="itemAdd">＋</button></div>
       <label class="field"><span>Notatki</span>
         <textarea name="notes" rows="3" placeholder="Co było w planie, samopoczucie, kontuzje…">${esc(s.notes)}</textarea>
       </label>
@@ -145,7 +157,7 @@ function exListHtml(date) {
     const unit = ex.bodyweight ? 'dociążenie kg' : 'ciężar kg';
     return `
       <div class="ex-card" data-i="${i}">
-        <div class="card-head"><strong>${esc(ex.name)}</strong>
+        <div class="card-head"><label class="check ex-done"><input type="checkbox" data-a="done" ${ex.done !== false ? 'checked' : ''}><strong>${esc(ex.name)}</strong></label>
           <button type="button" class="icon" data-a="delEx" aria-label="Usuń ćwiczenie">🗑️</button></div>
         ${last ? `<p class="muted">Ostatnio (${fmtDate(last.date)}): ${esc(fmtExSets(last.exercise))}</p>` : ''}
         <div class="ex-row ex-head"><span>Seria</span><span>Powt.</span><span>${unit}</span><span>${ex.bodyweight ? '% MC' : ''}</span><span title="Wysiłek 1–5">Wys.</span><span></span></div>
@@ -165,7 +177,18 @@ function exListHtml(date) {
   }).join('');
 }
 
+// Pozycje bez serii w formularzu: odhaczanie i usuwanie.
+function itemListHtml() {
+  if (!draftItems.length) return '';
+  return `<div class="ex-card"><strong>Bez serii</strong>${draftItems.map((x, i) => `
+    <div class="ns-row" data-k="${i}">
+      <label class="check ${x.done ? 'done' : ''}"><input type="checkbox" data-b="tick" ${x.done ? 'checked' : ''}><span>${esc(x.text)}</span></label>
+      <button type="button" class="icon" data-b="del" aria-label="Usuń pozycję">✕</button>
+    </div>`).join('')}</div>`;
+}
+
 function listHtml(sessions) {
+  const todayKey = today();
   if (!sessions.length) {
     return '<div class="empty">Brak zapisanych treningów.<br>Dodaj pierwszy albo zapisz sesję z timera.</div>';
   }
@@ -178,14 +201,19 @@ function listHtml(sessions) {
       month = m;
       html += `<h3 class="group-title">${monthLabel(s.date)}</h3><ul class="list">`;
     }
+    const planned = isPlanned(s, todayKey);
+    const st = checklistStatus(s);
+    const checkable = planned || st.open > 0;
+    const badge = planned ? '<span class="badge plan">📅 zaplanowany</span>'
+      : st.open ? `<span class="badge todo">do odhaczenia ${st.done}/${st.total}</span>` : '';
     html += `
-      <li class="item">
+      <li class="item ${planned ? 'planned' : ''}">
         <div class="item-main">
-          <div class="item-title">${esc(s.type)}</div>
+          <div class="item-title">${esc(s.type)} ${badge}</div>
           <div class="item-sub">${fmtDate(s.date)} · ${fmtMinutes(Number(s.duration) || 0)}${s.rpe ? ` · RPE ${s.rpe}` : ''}</div>
           ${hangLoadHtml(s.hang_load)}
           ${s.hang_sets?.length ? `<div class="item-sub">Serie: ${esc(fmtSets(s.hang_sets))}</div>` : ''}
-          ${exercisesHtml(s)}
+          ${exercisesHtml(s, checkable)}
           ${s.notes ? `<div class="item-notes">${esc(s.notes)}</div>` : ''}
         </div>
         <div class="item-actions">
@@ -200,9 +228,10 @@ function listHtml(sessions) {
 export function renderJournal(view) {
   function render() {
     const { sessions } = getState();
+    const done = performedSessions(sessions, today()); // bez zaplanowanych
     const weekStart = startOfWeek();
-    const week = sessions.filter((s) => parseDate(s.date) >= weekStart);
-    const month = sessions.filter((s) => s.date.startsWith(today().slice(0, 7)));
+    const week = done.filter((s) => parseDate(s.date) >= weekStart);
+    const month = done.filter((s) => s.date.startsWith(today().slice(0, 7)));
     const editing = sessions.find((s) => s.id === editingId);
     const base = editing || { date: today(), type: pendingType || SESSION_TYPES[0], duration: 90, rpe: null, notes: pendingNotes };
     const draft = draftFields ? { ...base, ...draftFields } : base;
@@ -245,6 +274,7 @@ export function renderJournal(view) {
         rpe: f.get('rpe') ? Number(f.get('rpe')) : null,
         notes: f.get('notes').trim(),
         exercises,
+        items: cleanItems(draftItems),
         // Masa ciała „zamrożona” w dniu treningu, żeby % MC w historii się nie zmieniał.
         body_weight_kg: exercises.some((x) => x.bodyweight) ? bodyWeightAt(date) : null,
       };
@@ -253,10 +283,23 @@ export function renderJournal(view) {
         if (existing) Object.assign(existing, data);
         else s.sessions.push({ id: uid(), created: Date.now(), ...data });
       });
-      toast(editingId ? 'Zapisano zmiany' : 'Dodano trening');
+      toast(editingId ? 'Zapisano zmiany' : date > today() ? 'Zaplanowano trening' : 'Dodano trening');
       closeForm();
     });
 
+    // Odhaczanie prosto z listy (bez otwierania edycji).
+    view.querySelectorAll('[data-tick]').forEach((cb) => cb.addEventListener('change', () => {
+      const [id, kind, i] = cb.dataset.tick.split('|');
+      update((s) => {
+        const x = s.sessions.find((y) => y.id === id);
+        const el = (kind === 'ex' ? x?.exercises : x?.items)?.[Number(i)];
+        if (!el) return;
+        el.done = cb.checked;
+        // Pierwsze odhaczone ćwiczenie z masą ciała: zamrażamy masę z dnia treningu (do % MC).
+        if (kind === 'ex' && cb.checked && el.bodyweight && x.body_weight_kg == null) x.body_weight_kg = bodyWeightAt(x.date);
+      });
+      render();
+    }));
     view.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => {
       openForm(b.dataset.edit);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -271,7 +314,13 @@ export function renderJournal(view) {
   function bindExercises() {
     const list = view.querySelector('#exList');
     const dateInput = view.querySelector('#form [name="date"]');
-    const draw = () => { list.innerHTML = exListHtml(dateInput.value || today()); };
+    const itemsEl = view.querySelector('#itemList');
+    const planned = () => (dateInput.value || today()) > today();
+    const draw = () => {
+      list.innerHTML = exListHtml(dateInput.value || today());
+      itemsEl.innerHTML = itemListHtml();
+      view.querySelector('#planHint').hidden = !planned();
+    };
     draw();
     dateInput.addEventListener('change', draw);
 
@@ -291,12 +340,10 @@ export function renderJournal(view) {
         if (!lib) return;
         if (lib.kind !== 'sets') {
           // Bez serii (timer, czas, na ścianie): dopisujemy linię do notatki.
-          const notes = view.querySelector('[name="notes"]');
-          const line = `• ${lib.name} – ${lib.dose}`;
-          if (notes.value.includes(line)) return toast('To ćwiczenie jest już w notatce');
-          notes.value = notes.value.trim() ? `${notes.value.trimEnd()}\n${line}` : line;
-          notes.dispatchEvent(new Event('input', { bubbles: true }));
-          return toast('Dopisano do notatki (ćwiczenie bez serii)');
+          const text = `${lib.name} – ${lib.dose}`;
+          if (draftItems.some((x) => x.text === text)) return toast('To ćwiczenie jest już na liście');
+          draftItems.push({ text, done: !planned() });
+          return draw();
         }
         name = lib.name;
         bodyweight = !!lib.sets.bodyweight;
@@ -309,7 +356,7 @@ export function renderJournal(view) {
       // Wstępne wypełnienie seriami z ostatniego wykonania tego ćwiczenia (albo domyślnymi z biblioteki).
       const last = lastExercise(getState().sessions, name, editingId);
       const sets = last ? last.exercise.sets.map((s) => ({ ...s })) : libSets || [{ reps: 5, added_kg: 0 }];
-      draftEx.push({ name, bodyweight: last ? !!last.exercise.bodyweight : bodyweight, sets });
+      draftEx.push({ name, bodyweight: last ? !!last.exercise.bodyweight : bodyweight, done: !planned(), sets });
       draw();
     });
 
@@ -329,11 +376,31 @@ export function renderJournal(view) {
       }
     });
 
+    itemsEl.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-b]')?.dataset.b;
+      const row = e.target.closest('[data-k]');
+      if (!b || !row || e.target.tagName === 'SPAN') return;
+      if (b === 'tick') draftItems[row.dataset.k].done = e.target.checked;
+      if (b === 'del') draftItems.splice(row.dataset.k, 1);
+      draw();
+    });
+    const addItem = () => {
+      const inp = view.querySelector('#itemText');
+      const text = inp.value.trim();
+      if (!text) return;
+      if (!draftItems.some((x) => x.text.toLowerCase() === text.toLowerCase())) draftItems.push({ text, done: !planned() });
+      inp.value = '';
+      draw();
+    };
+    view.querySelector('#itemAdd').addEventListener('click', addItem);
+    view.querySelector('#itemText').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } });
+
     list.addEventListener('click', (e) => {
       const a = e.target.closest('[data-a]')?.dataset.a;
       const card = e.target.closest('[data-i]');
       if (!a || !card) return;
       const ex = draftEx[card.dataset.i];
+      if (a === 'done') { ex.done = e.target.checked; return; }
       if (a === 'delEx') draftEx.splice(card.dataset.i, 1);
       if (a === 'addSet') ex.sets.push({ ...(ex.sets.at(-1) || { reps: 5, added_kg: 0 }) }); // kopia ostatniej serii
       if (a === 'delSet') ex.sets.splice(e.target.closest('[data-j]').dataset.j, 1);
@@ -347,6 +414,7 @@ export function renderJournal(view) {
     draftFields = null;
     const s = id ? getState().sessions.find((x) => x.id === id) : null;
     draftEx = structuredClone(s?.exercises || []);
+    draftItems = structuredClone(s?.items || []);
     render();
   }
 
@@ -354,6 +422,7 @@ export function renderJournal(view) {
     formOpen = false;
     editingId = null;
     draftEx = [];
+    draftItems = [];
     pendingType = null;
     pendingNotes = '';
     draftFields = null;
@@ -372,7 +441,8 @@ export function renderJournal(view) {
       const s = statusOf(week);
       return s ? `<span class="wk-status ${s}" title="Plan: ${STATUS_LABELS[s]}"></span>` : '';
     };
-    const dots = (list) => list.slice(0, 3).map((s) => `<i style="background:${typeColor(s.type)}"></i>`).join('')
+    // Zaplanowane (data w przyszłości) – kropka z obwódką zamiast wypełnionej.
+    const dots = (list) => list.slice(0, 3).map((s) => (s.date > todayKey ? `<i class="pl" style="border-color:${typeColor(s.type)}"></i>` : `<i style="background:${typeColor(s.type)}"></i>`)).join('')
       + (list.length > 3 ? '<b>+</b>' : '');
     let body;
     if (calScope === 'month') {
@@ -460,7 +530,7 @@ export function renderJournal(view) {
       rpe: f.get('rpe') ? Number(f.get('rpe')) : null, notes: f.get('notes'),
     };
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: Date.now(), editingId, fields: draftFields, draftEx }));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: Date.now(), editingId, fields: draftFields, draftEx, draftItems }));
     } catch { /* brak pamięci */ }
   }
 
@@ -473,6 +543,7 @@ export function renderJournal(view) {
         editingId = saved.editingId && getState().sessions.some((s) => s.id === saved.editingId) ? saved.editingId : null;
         draftFields = saved.fields;
         draftEx = saved.draftEx || [];
+        draftItems = saved.draftItems || [];
         setTimeout(() => toast('Przywrócono niezapisany wpis'), 0);
       }
     } catch { /* uszkodzony szkic – pomijamy */ }

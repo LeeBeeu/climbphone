@@ -86,6 +86,7 @@ function strengthEntries(sessions) {
         added_kg: s.hang_load.added_kg, body_weight_kg: s.hang_load.body_weight_kg, reps: null });
     }
     for (const ex of s.exercises || []) {
+      if (ex.done === false) continue; // zaplanowane, jeszcze niezrobione
       const best = ex.bodyweight ? bestExSet(ex.sets) : null;
       if (!best) continue;
       out.push({ key: exKey(ex.name), name: ex.name, date: s.date,

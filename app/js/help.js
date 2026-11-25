@@ -74,6 +74,7 @@ const SECTIONS = [
         <li>Najszybciej: wybierz trening z <a href="#/biblioteka">📚 Biblioteki</a> i dodaj go do planu.</li>
         <li><strong>📋 Wklej plan z tekstu</strong> (na dole listy planów): plan przygotowany np. w czacie z Claude – z tygodniami, fazami i notatkami. Ściągawka formatu jest na tym ekranie; możesz poprosić Claude, żeby przepisał plan według niej.</li>
         <li><strong>⧉ Kopiuj poprzedni tydzień</strong> – gdy kolejny tydzień ma wyglądać podobnie.</li>
+        <li><strong>Trening w 📓 Dzienniku z datą w przyszłości</strong> to trening zaplanowany (📅): nie liczy się do statystyk. Po treningu odhaczasz ćwiczenia prosto na liście albo w edycji; wpis z przeszłą datą i nieodhaczonymi ćwiczeniami ma znaczek „do odhaczenia”. Jeśli treningu nie było – usuń wpis 🗑️.</li>
       </ul>
       <h3>Rozsądny tydzień amatora</h3>
       <ul>

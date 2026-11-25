@@ -137,7 +137,9 @@ export function workoutJournal(w, all) {
   const list = workoutExercises(w, all);
   return {
     exercises: list.filter((e) => e.kind === 'sets').map(journalExerciseFrom),
-    notes: [`Trening: ${w.name}`, ...list.filter((e) => e.kind !== 'sets').map((e) => `• ${e.name} – ${e.dose}`)].join('\n'),
+    // Ćwiczenia bez serii jako lista do odhaczenia w dzienniku.
+    items: list.filter((e) => e.kind !== 'sets').map((e) => ({ text: `${e.name} – ${e.dose}`, done: true })),
+    notes: `Trening: ${w.name}`,
   };
 }
 

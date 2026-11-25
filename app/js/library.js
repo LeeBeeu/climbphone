@@ -464,7 +464,7 @@ export function renderLibrary(view) {
       // Rodzaj według głównej części treningu (bez rozgrzewki i mobilności).
       const main = ex.filter((e) => !['warmup', 'mobility'].includes(e.cat));
       const types = (main.length ? main : ex).map(sessionType).filter(Boolean);
-      openJournalWith({ exercises: j.exercises, notes: j.notes, type: types[0] || null });
+      openJournalWith({ exercises: j.exercises, items: j.items, notes: j.notes, type: types[0] || null });
       location.hash = '#/dziennik';
     });
     view.querySelector('#copyWk')?.addEventListener('click', () => {

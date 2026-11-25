@@ -102,7 +102,8 @@ test('treningi: gotowe zestawy, plan, dziennik, usuwanie ćwiczenia', async () =
   assert.equal(workoutPoolItem(own), 'Trening: Moja sesja');
   const j = workoutJournal(own, LIBRARY);
   assert.deepEqual(j.exercises.map((e) => e.name), ['Podciąganie']);
-  assert.equal(j.notes, 'Trening: Moja sesja\n• ARC – ciągłe wspinanie – 2–3 × 20–30 min');
+  assert.equal(j.notes, 'Trening: Moja sesja');
+  assert.deepEqual(j.items, [{ text: 'ARC – ciągłe wspinanie – 2–3 × 20–30 min', done: true }]);
   assert.deepEqual(removeFromWorkouts([own], 'pullups')[0].items, ['own-x', 'arc']);
 });
 

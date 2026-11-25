@@ -138,15 +138,17 @@ export function finishSummary(s, all, now = Date.now()) {
   const exercises = doneEx.filter((e) => e.kind === 'sets').map(journalExerciseFrom);
   const skipped = s.items.filter((i) => i.skipped);
   const notDone = s.items.filter((i) => !i.done && !i.skipped);
+  // Zrobione pozycje bez serii → odhaczone pozycje w dzienniku; pominięte i niezrobione – w notatce.
+  const doneItems = done.filter((i) => exOf(i)?.kind !== 'sets').map((i) => ({ text: i.text, done: true }));
   const lines = [
     s.title ? `Trening: ${s.title}` : `Trening (${placeLabel(s.place).toLowerCase()})`,
-    ...done.map((i) => `✓ ${i.text}`),
     ...skipped.map((i) => `✗ pominięte: ${i.text}`),
     ...notDone.map((i) => `○ niezrobione: ${i.text}`),
   ];
   const duration = elapsedMinutes(s, now);
   return {
     exercises,
+    items: doneItems,
     type: dominantType(s, exOf),
     notes: lines.join('\n'),
     fields: { date: s.date, ...(duration ? { duration } : {}) },

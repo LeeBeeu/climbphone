@@ -6,6 +6,7 @@ import {
 } from './plan-calc.js';
 import { checkinCardHtml, bindCheckin } from './checkin.js';
 import { sessionCardHtml } from './session.js';
+import { performedSessions } from './exercises.js';
 import { parsePlanText, buildPlan, planSummary } from './plan-import.js';
 import { matchExercise } from './session-calc.js';
 import { allExercises } from './library-calc.js';
@@ -266,7 +267,7 @@ TYDZIEŃ 5 | Deload | lżej, ~50%</pre>
     const days = effectiveDays(plan, week);
     const pool = poolSlots(effectivePool(plan, week));
     const hist = Array.from({ length: 8 }, (_, i) => shiftWeek(week, i - 7));
-    const sessions = getState().sessions;
+    const sessions = performedSessions(getState().sessions, today()); // bez zaplanowanych
 
     view.innerHTML = `
       <button class="btn ghost small" id="back" style="align-self:flex-start">← Wszystkie plany</button>

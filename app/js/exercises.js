@@ -39,8 +39,37 @@ export function exerciseCatalog(sessions, custom = []) {
   return [...map.values()];
 }
 
+// ---------- Treningi zaplanowane i odhaczanie ----------
+// Trening z datą w przyszłości jest zaplanowany. Ćwiczenie z done === false (i pozycja items[] z done === false)
+// czeka na odhaczenie; brak pola = zrobione (starsze wpisy).
+// items: [{ text, done }] – ćwiczenia bez serii (na ścianie, timer, czas) jako lista do odhaczenia.
+
+export const isPlanned = (s, todayKey) => s.date > todayKey;
+
+// Ile pozycji treningu jest odhaczonych: ćwiczenia z seriami + pozycje bez serii.
+export function checklistStatus(s) {
+  const all = [...(s.exercises || []), ...(s.items || [])];
+  const done = all.filter((x) => x.done !== false).length;
+  return { done, total: all.length, open: all.length - done };
+}
+
+// Treningi do statystyk: bez zaplanowanych (data w przyszłości) i bez nieodhaczonych ćwiczeń.
+export function performedSessions(sessions, todayKey) {
+  return sessions
+    .filter((s) => s.date <= todayKey)
+    .map((s) => ((s.exercises || []).some((e) => e.done === false) ? { ...s, exercises: s.exercises.filter((e) => e.done !== false) } : s));
+}
+
+// Pozycje bez serii z formularza: niepuste teksty, bez duplikatów.
+export function cleanItems(list) {
+  const seen = new Set();
+  return (list || [])
+    .map((x) => ({ text: String(x.text || '').trim(), done: x.done !== false }))
+    .filter((x) => x.text && !seen.has(x.text.toLowerCase()) && seen.add(x.text.toLowerCase()));
+}
+
 // Lista „+ Dodaj ćwiczenie” w dzienniku: cała biblioteka (z własnymi) w kategoriach, a na początku
-// nazwy spoza biblioteki, które już są w dzienniku. Ćwiczenia bez serii (timer, czas, na ścianie) trafiają do notatki.
+// nazwy spoza biblioteki, które już są w dzienniku. Ćwiczenia bez serii (timer, czas, na ścianie) trafiają do listy items.
 // Zwraca [{ label, options: [{ value, label }] }]; value: „lib:<id>” albo „name:<nazwa>”.
 export function journalPickerGroups(sessions, custom = []) {
   const all = [...LIBRARY, ...custom];
@@ -62,7 +91,7 @@ export function journalPickerGroups(sessions, custom = []) {
       label: c.label,
       options: list.map((e) => ({
         value: `lib:${e.id}`,
-        label: `${e.name}${e.kind === 'sets' ? (e.sets.bodyweight ? '' : ' (ciężar)') : ' · do notatki'}`,
+        label: `${e.name}${e.kind === 'sets' ? (e.sets.bodyweight ? '' : ' (ciężar)') : ' · bez serii'}`,
       })),
     });
   }
@@ -75,7 +104,7 @@ export function lastExercise(sessions, name, skipId = null) {
   let found = null;
   for (const s of sessions) {
     if (s.id === skipId) continue;
-    const ex = (s.exercises || []).find((e) => exKey(e.name) === k && e.sets?.length);
+    const ex = (s.exercises || []).find((e) => exKey(e.name) === k && e.sets?.length && e.done !== false);
     if (!ex) continue;
     if (!found || s.date > found.date || (s.date === found.date && (s.created || 0) > (found.created || 0))) {
       found = { date: s.date, created: s.created, exercise: ex };
@@ -90,6 +119,7 @@ export function cleanExercises(list) {
     .map((ex) => ({
       name: String(ex.name).trim(),
       bodyweight: !!ex.bodyweight,
+      done: ex.done !== false,
       sets: (ex.sets || [])
         .map((s) => ({
           reps: Math.round(Number(s.reps)),

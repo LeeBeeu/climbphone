@@ -32,7 +32,7 @@ test('czyszczenie formularza: liczby, puste serie i ćwiczenia odpadają', () =>
     { name: ' Podciąganie ', bodyweight: true, sets: [{ reps: '5', added_kg: '20' }, { reps: '', added_kg: '20' }, { reps: '0', added_kg: 5 }] },
     { name: 'Dipy', bodyweight: true, sets: [{ reps: '', added_kg: 0 }] },
   ]);
-  assert.deepEqual(out, [{ name: 'Podciąganie', bodyweight: true, sets: [{ reps: 5, added_kg: 20, effort: null }] }]);
+  assert.deepEqual(out, [{ name: 'Podciąganie', bodyweight: true, done: true, sets: [{ reps: 5, added_kg: 20, effort: null }] }]);
   assert.equal(cleanExercises([{ name: 'Dipy', sets: [{ reps: 8, added_kg: 0, effort: 4 }] }])[0].sets[0].effort, 4);
   assert.equal(fmtExSets({ bodyweight: true, sets: [{ reps: 5, added_kg: 20, effort: 3 }, { reps: 5, added_kg: 20, effort: 5 }] }), '2×5 +20 kg · wysiłek 4/5');
 });
@@ -68,7 +68,23 @@ test('lista ćwiczeń w dzienniku: biblioteka w kategoriach, bez serii – do no
   assert.ok(g[0].options.some((o) => o.value === 'name:Moje ćwiczenie'));
   assert.ok(!g[0].options.some((o) => o.label === 'Pompki'), 'Pompki są w bibliotece, nie w „innych”');
   const all = g.flatMap((x) => x.options);
-  assert.ok(all.some((o) => o.value === 'lib:moon_limit' && o.label.endsWith('· do notatki')));
+  assert.ok(all.some((o) => o.value === 'lib:moon_limit' && o.label.endsWith('· bez serii')));
   assert.ok(all.some((o) => o.value === 'lib:own-1'));
   assert.ok(all.some((o) => o.value === 'lib:deadlift' && o.label.endsWith('(ciężar)')));
+});
+
+test('zaplanowane i odhaczanie: status, statystyki bez planów i niezrobionych ćwiczeń', async () => {
+  const { checklistStatus, performedSessions, cleanItems, isPlanned } = await import('../app/js/exercises.js');
+  const s = { date: '2026-11-20', exercises: [{ name: 'A', done: true, sets: [] }, { name: 'B', done: false, sets: [] }, { name: 'C', sets: [] }],
+    items: [{ text: 'Limit', done: false }, { text: 'ARC', done: true }] };
+  assert.deepEqual(checklistStatus(s), { done: 3, total: 5, open: 2 });
+  const future = { date: '2026-12-01', exercises: [] };
+  const out = performedSessions([s, future], '2026-11-25');
+  assert.equal(out.length, 1);
+  assert.deepEqual(out[0].exercises.map((e) => e.name), ['A', 'C']);
+  assert.equal(isPlanned(future, '2026-11-25'), true);
+  assert.deepEqual(cleanItems([{ text: ' x ', done: false }, { text: 'X' }, { text: '' }]), [{ text: 'x', done: false }]);
+  // Niezrobione ćwiczenie nie jest „ostatnim wykonaniem” ani punktem na wykresie siły.
+  const sessions = [{ id: '1', date: '2026-11-01', exercises: [pull([[5, 10]])] }, { id: '2', date: '2026-11-20', exercises: [{ ...pull([[5, 30]]), done: false }] }];
+  assert.equal(lastExercise(sessions, 'Podciąganie').date, '2026-11-01');
 });
