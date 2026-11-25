@@ -6,7 +6,7 @@
 //   bodyweight = false → added_kg to ciężar sztangi / hantli w kg
 // Sesja z ćwiczeniem z masą ciała zapisuje body_weight_kg = trend wagi z dnia treningu (MC-50).
 import { exKey, bestExSet, fmtAdded, effortSuffix } from './load-calc.js';
-import { LIBRARY } from './library-data.js';
+import { LIBRARY, CATEGORIES } from './library-data.js';
 
 export { exKey, bestExSet };
 
@@ -37,6 +37,36 @@ export function exerciseCatalog(sessions, custom = []) {
     }
   }
   return [...map.values()];
+}
+
+// Lista „+ Dodaj ćwiczenie” w dzienniku: cała biblioteka (z własnymi) w kategoriach, a na początku
+// nazwy spoza biblioteki, które już są w dzienniku. Ćwiczenia bez serii (timer, czas, na ścianie) trafiają do notatki.
+// Zwraca [{ label, options: [{ value, label }] }]; value: „lib:<id>” albo „name:<nazwa>”.
+export function journalPickerGroups(sessions, custom = []) {
+  const all = [...LIBRARY, ...custom];
+  const known = new Set(all.map((e) => exKey(e.name)));
+  const own = [];
+  const seen = new Set();
+  for (const s of [...sessions].sort((a, b) => b.date.localeCompare(a.date))) {
+    for (const ex of s.exercises || []) {
+      const k = exKey(ex.name);
+      if (!known.has(k) && !seen.has(k)) { seen.add(k); own.push(ex.name); }
+    }
+  }
+  for (const e of EXERCISES) if (!known.has(exKey(e.name)) && !seen.has(exKey(e.name))) { seen.add(exKey(e.name)); own.push(e.name); }
+  const groups = own.length ? [{ label: 'Z dziennika i inne', options: own.map((n) => ({ value: `name:${n}`, label: n })) }] : [];
+  for (const c of CATEGORIES) {
+    const list = all.filter((e) => e.cat === c.id);
+    if (!list.length) continue;
+    groups.push({
+      label: c.label,
+      options: list.map((e) => ({
+        value: `lib:${e.id}`,
+        label: `${e.name}${e.kind === 'sets' ? (e.sets.bodyweight ? '' : ' (ciężar)') : ' · do notatki'}`,
+      })),
+    });
+  }
+  return groups;
 }
 
 // Ostatnie wykonanie ćwiczenia (opcjonalnie z pominięciem edytowanej sesji): { date, exercise } albo null.

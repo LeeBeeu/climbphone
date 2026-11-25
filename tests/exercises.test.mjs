@@ -59,3 +59,16 @@ test('ćwiczenia z masą ciała trafiają na wykres siły względnej', () => {
   const s = strengthSeries(sessions, 'ex:podciąganie');
   assert.deepEqual(s.map((p) => [p.date, p.pct_bw, p.reps]), [['2026-11-01', 130, 3], ['2026-11-08', 127.5, 5]]);
 });
+
+test('lista ćwiczeń w dzienniku: biblioteka w kategoriach, bez serii – do notatki', async () => {
+  const { journalPickerGroups } = await import('../app/js/exercises.js');
+  const sessions = [{ date: '2026-11-01', exercises: [{ name: 'Moje ćwiczenie', sets: [] }, { name: 'Pompki', sets: [] }] }];
+  const g = journalPickerGroups(sessions, [{ id: 'own-1', name: 'Własne core', cat: 'core', kind: 'sets', sets: { sets: 3, reps: 10, bodyweight: true } }]);
+  assert.equal(g[0].label, 'Z dziennika i inne');
+  assert.ok(g[0].options.some((o) => o.value === 'name:Moje ćwiczenie'));
+  assert.ok(!g[0].options.some((o) => o.label === 'Pompki'), 'Pompki są w bibliotece, nie w „innych”');
+  const all = g.flatMap((x) => x.options);
+  assert.ok(all.some((o) => o.value === 'lib:moon_limit' && o.label.endsWith('· do notatki')));
+  assert.ok(all.some((o) => o.value === 'lib:own-1'));
+  assert.ok(all.some((o) => o.value === 'lib:deadlift' && o.label.endsWith('(ciężar)')));
+});

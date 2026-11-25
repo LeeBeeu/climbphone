@@ -43,7 +43,8 @@ export const TYPE_OVERRIDES = {
 export const GOAL_OVERRIDES = {
   warm_board: ['fingers', 'prevention'], warm_easy_climb: ['movement', 'prevention'], warm_progressive: ['movement', 'prevention'],
   warm_shoulders_band: ['push', 'prevention'], board_pullups: ['fingers', 'pull'],
-  limit_bouldering: ['fingers', 'movement'], systemboard_limit: ['fingers', 'pull', 'movement'], dyno_practice: ['movement', 'legs'],
+  limit_bouldering: ['fingers', 'movement'], systemboard_limit: ['fingers', 'pull', 'movement'],
+  moon_limit: ['fingers', 'pull', 'movement'], moon_flash: ['fingers', 'movement'], moon_moves: ['fingers', 'pull'], dyno_practice: ['movement', 'legs'],
   deadpoints: ['movement', 'pull'], explosive_pullups: ['pull'], campus_feet: ['fingers', 'movement'],
   arc: ['aerobic', 'movement'], shakeouts: ['aerobic', 'movement'], cardio_easy: ['aerobic', 'legs'],
   deadlift: ['legs', 'core'], squat: ['legs'], pistol: ['legs', 'mobility'], front_lever: ['core', 'pull'],

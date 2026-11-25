@@ -6,8 +6,9 @@ import {
 import { weekKeyOf, shiftWeek } from './plan-calc.js';
 import { fmtAdded, fmtSets, bodyWeightOn, effortOptions } from './load-calc.js';
 import {
-  exerciseCatalog, lastExercise, cleanExercises, exPct, fmtExSets, bestExSet, exKey,
+  exerciseCatalog, lastExercise, cleanExercises, exPct, fmtExSets, bestExSet, exKey, journalPickerGroups,
 } from './exercises.js';
+import { findExercise, journalExerciseFrom } from './library-calc.js';
 
 // Obciążenie zapisane z timera: „+5 kg · 106% MC (MC 80,8 kg)”.
 function hangLoadHtml(l) {
@@ -92,7 +93,7 @@ const sumMinutes = (list) => list.reduce((t, s) => t + (Number(s.duration) || 0)
 
 function formHtml(s) {
   const types = SESSION_TYPES.includes(s.type) ? SESSION_TYPES : [...SESSION_TYPES, s.type];
-  const catalog = exerciseCatalog(getState().sessions, getState().customExercises);
+  const pickerGroups = journalPickerGroups(getState().sessions, getState().customExercises);
   return `
     <form class="card" id="form">
       <h2>${editingId ? 'Edytuj trening' : 'Nowy trening'}</h2>
@@ -120,7 +121,7 @@ function formHtml(s) {
       <label class="field"><span class="sr-only">Dodaj ćwiczenie</span>
         <select id="exPick">
           <option value="">+ Dodaj ćwiczenie…</option>
-          ${catalog.map((e) => `<option value="${esc(e.name)}">${esc(e.name)}${e.bodyweight ? '' : ' (ciężar)'}</option>`).join('')}
+          ${pickerGroups.map((g) => `<optgroup label="${esc(g.label)}">${g.options.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('')}</optgroup>`).join('')}
           <option value="__new">Inne ćwiczenie…</option>
         </select>
       </label>
@@ -275,21 +276,39 @@ export function renderJournal(view) {
     dateInput.addEventListener('change', draw);
 
     view.querySelector('#exPick').addEventListener('change', (e) => {
-      let name = e.target.value;
+      const val = e.target.value;
       e.target.value = '';
-      if (!name) return;
+      if (!val) return;
+      let name;
       let bodyweight;
-      if (name === '__new') {
+      let libSets = null; // domyślne serie z biblioteki, gdy ćwiczenia nie było jeszcze w dzienniku
+      if (val === '__new') {
         name = prompt('Nazwa ćwiczenia:')?.trim();
         if (!name) return;
         bodyweight = confirm('Ćwiczenie z masą ciała (kg to dociążenie, liczymy % masy ciała)?\nAnuluj = ćwiczenie z ciężarem (kg to ciężar sztangi/hantli).');
+      } else if (val.startsWith('lib:')) {
+        const lib = findExercise(val.slice(4), getState().customExercises);
+        if (!lib) return;
+        if (lib.kind !== 'sets') {
+          // Bez serii (timer, czas, na ścianie): dopisujemy linię do notatki.
+          const notes = view.querySelector('[name="notes"]');
+          const line = `• ${lib.name} – ${lib.dose}`;
+          if (notes.value.includes(line)) return toast('To ćwiczenie jest już w notatce');
+          notes.value = notes.value.trim() ? `${notes.value.trimEnd()}\n${line}` : line;
+          notes.dispatchEvent(new Event('input', { bubbles: true }));
+          return toast('Dopisano do notatki (ćwiczenie bez serii)');
+        }
+        name = lib.name;
+        bodyweight = !!lib.sets.bodyweight;
+        libSets = journalExerciseFrom(lib).sets;
       } else {
+        name = val.replace(/^name:/, '');
         bodyweight = exerciseCatalog(getState().sessions, getState().customExercises).find((x) => exKey(x.name) === exKey(name))?.bodyweight ?? true;
       }
       if (draftEx.some((x) => exKey(x.name) === exKey(name))) return toast('To ćwiczenie jest już na liście');
-      // Wstępne wypełnienie seriami z ostatniego wykonania tego ćwiczenia.
+      // Wstępne wypełnienie seriami z ostatniego wykonania tego ćwiczenia (albo domyślnymi z biblioteki).
       const last = lastExercise(getState().sessions, name, editingId);
-      const sets = last ? last.exercise.sets.map((s) => ({ ...s })) : [{ reps: 5, added_kg: 0 }];
+      const sets = last ? last.exercise.sets.map((s) => ({ ...s })) : libSets || [{ reps: 5, added_kg: 0 }];
       draftEx.push({ name, bodyweight: last ? !!last.exercise.bodyweight : bodyweight, sets });
       draw();
     });
