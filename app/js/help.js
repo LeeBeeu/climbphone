@@ -137,7 +137,9 @@ const SECTIONS = [
         <dt>Obciążenie w % masy ciała wygląda dziwnie</dt>
         <dd>Liczy się z trendu wagi. Bez ważeń z ostatnich tygodni trend jest nieaktualny – zważ się kilka razy.</dd>
         <dt>Czy dane trafiają do internetu?</dt>
-        <dd>Nie. Wszystko zostaje w telefonie, dopóki sam nie wyeksportujesz kopii.</dd>
+        <dd>Tylko jeśli włączysz synchronizację (⚙️ Ustawienia → Synchronizacja, logowanie kontem Google). Wtedy kopia trafia do Twojej prywatnej bazy w Firebase, widocznej tylko dla Twojego konta. Bez logowania wszystko zostaje w telefonie.</dd>
+        <dt>Jak przenieść dane na nowy telefon albo komputer?</dt>
+        <dd>Z synchronizacją: zainstaluj aplikację i zaloguj się tym samym kontem Google – dane pobiorą się same. Bez niej: eksport kopii na starym urządzeniu i import na nowym.</dd>
       </dl>`,
   },
 ];

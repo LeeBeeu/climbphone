@@ -65,7 +65,11 @@ let state = load();
 
 export const getState = () => state;
 
-export function update(mutator) {
+// Słuchacze zmian (synchronizacja). source: 'local' – zmiana w aplikacji, 'remote' – zmiana z chmury.
+const listeners = new Set();
+export function onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+
+export function update(mutator, { source = 'local' } = {}) {
   mutator(state);
   try {
     localStorage.setItem(KEY, JSON.stringify(state));
@@ -73,6 +77,7 @@ export function update(mutator) {
     console.error(err);
     toast('Nie udało się zapisać danych!');
   }
+  listeners.forEach((fn) => { try { fn(source); } catch (err) { console.error(err); } });
 }
 
 export function replaceState(data) {

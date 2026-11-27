@@ -11,6 +11,7 @@ import { renderSettings } from './settings.js';
 import { renderHelp } from './help.js';
 import { renderSession } from './session.js';
 import { getState } from './store.js';
+import { initSync } from './sync.js';
 import { pwa } from './ui.js';
 import { RESUME_MAX_MS } from './timer.js';
 
@@ -70,6 +71,29 @@ function restoreRoute() {
 restoreRoute();
 window.addEventListener('hashchange', navigate);
 navigate();
+
+// Synchronizacja: łączymy się w tle (tylko gdy skonfigurowana i włączona na tym urządzeniu).
+initSync();
+// Dane przyszły z chmury – przerysuj ekran, chyba że ktoś właśnie coś wpisuje albo trwa timer / próby.
+let staleView = false;
+window.addEventListener('climbphone:remote', () => {
+  const route = location.hash.replace(/^#\/?/, '');
+  const typing = view.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if (typing || ['timer', 'proby'].includes(route) || view.querySelector('form')) { staleView = true; return; }
+  rerender();
+});
+// Przerysowanie bez skoku na górę strony.
+function rerender() {
+  const y = window.scrollY;
+  navigate();
+  window.scrollTo(0, y);
+}
+document.addEventListener('focusout', () => {
+  if (!staleView) return;
+  setTimeout(() => {
+    if (staleView && !view.contains(document.activeElement) && !view.querySelector('form')) { staleView = false; rerender(); }
+  }, 300);
+});
 
 // Czas ostatniej aktywności odświeżamy przy wyjściu z aplikacji (liczy się od zamknięcia, nie od wejścia na ekran).
 document.addEventListener('visibilitychange', () => {

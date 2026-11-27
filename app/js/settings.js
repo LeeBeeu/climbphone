@@ -6,6 +6,7 @@ import { exportBackup } from './backup.js';
 import { backupStatus, sinceText, REMINDER_OPTIONS } from './backup-calc.js';
 import { bestGrade, gradeMilestones, systemLabel, bmi } from './profile-calc.js';
 import { currentBodyWeight } from './load-calc.js';
+import { syncStatus, onSyncStatus, signIn, signOut, syncNow } from './sync.js';
 
 // Profil: wzrost, masa (trend), BMI, najlepsze wyceny z logbooka i historia rekordów.
 function profileHtml(st) {
@@ -93,6 +94,8 @@ export function renderSettings(view) {
           τ dotyczy metody Libry, α metody Hacker's Diet. Większe τ albo mniejsze α – gładszy, wolniej reagujący trend.
           „Wartość dnia” to punkt na wykresie (i podstawa trendu w metodzie Hacker's Diet).</p>
       </section>
+
+      <section class="card" id="syncCard">${syncCardHtml()}</section>
 
       <section class="card">
         <h2>Kopia zapasowa</h2>
@@ -249,12 +252,62 @@ export function renderSettings(view) {
 
     view.querySelector('#wipe').addEventListener('click', () => {
       if (!confirm('Na pewno usunąć wszystkie treningi, przejścia i plany?')) return;
-      if (!confirm('Tego nie da się cofnąć. Upewnij się, że masz kopię (eksport).\n\nOK = usuń wszystko')) return;
+      const cloud = syncStatus().signedIn ? '\n\nSynchronizacja jest włączona – dane znikną też z chmury i z innych urządzeń.' : '';
+      if (!confirm(`Tego nie da się cofnąć. Upewnij się, że masz kopię (eksport).${cloud}\n\nOK = usuń wszystko`)) return;
       replaceState({});
       toast('Usunięto wszystkie dane');
       render();
     });
+    bindSyncCard();
   }
 
+  // Karta synchronizacji odświeża się sama przy zmianie stanu (bez przerysowania całego ekranu).
+  function bindSyncCard() {
+    const card = view.querySelector('#syncCard');
+    if (!card) return;
+    card.querySelector('#syncIn')?.addEventListener('click', () => signIn());
+    card.querySelector('#syncOut')?.addEventListener('click', () => signOut());
+    card.querySelector('#syncNow')?.addEventListener('click', () => { syncNow(); toast('Synchronizuję…'); });
+  }
+  const offStatus = onSyncStatus(() => {
+    const card = view.querySelector('#syncCard');
+    if (!card) return;
+    card.innerHTML = syncCardHtml();
+    bindSyncCard();
+  });
+
   render();
+  return () => offStatus();
+}
+
+// ---------- Synchronizacja ----------
+
+const SYNC_STATES = {
+  off: '', connecting: '⏳ Łączę…', synced: '✅ Zsynchronizowano', pending: '⏳ Wysyłam zmiany…',
+  offline: '📴 Brak internetu – zmiany poczekają', error: '⚠️ Problem z synchronizacją', signedout: '',
+};
+
+function syncCardHtml() {
+  const s = syncStatus();
+  if (!s.configured) {
+    return `<h2>Synchronizacja</h2>
+      <p class="muted">Wyłączona – dane są tylko na tym urządzeniu. Włączenie wymaga jednorazowej konfiguracji Firebase (instrukcja w docs/firebase.md).</p>`;
+  }
+  const time = s.lastSync ? new Date(s.lastSync).toLocaleString('pl-PL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  if (!s.signedIn) {
+    return `<h2>Synchronizacja</h2>
+      <p class="muted">Zaloguj się kontem Google, a dane będą kopiowane do chmury i dostępne na innych urządzeniach
+        (telefon, komputer). Aplikacja dalej działa bez internetu – zmiany wyślą się po połączeniu.</p>
+      ${s.error ? `<p class="hint warn-hint">${esc(s.error)}</p>` : ''}
+      <button class="btn primary" id="syncIn" ${s.state === 'connecting' ? 'disabled' : ''}>${s.state === 'connecting' ? '⏳ Łączę…' : '🔐 Zaloguj kontem Google'}</button>`;
+  }
+  return `<div class="card-head"><h2>Synchronizacja</h2><span class="muted">${esc(SYNC_STATES[s.state] || '')}</span></div>
+    <p>Konto: <strong>${esc(s.email)}</strong></p>
+    <p class="muted">${s.pending ? `Do wysłania: ${s.pending} ${s.pending === 1 ? 'zmiana' : 'zmian'}. ` : ''}${time ? `Ostatnia synchronizacja: ${time}.` : ''}</p>
+    ${s.error ? `<p class="hint warn-hint">${esc(s.error)}</p>` : ''}
+    <div class="row">
+      <button class="btn" id="syncNow">🔄 Synchronizuj teraz</button>
+      <button class="btn ghost" id="syncOut">Wyloguj</button>
+    </div>
+    <p class="muted">Ręczny eksport kopii (niżej) nadal warto robić od czasu do czasu.</p>`;
 }
